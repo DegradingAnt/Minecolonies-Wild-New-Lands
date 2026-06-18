@@ -15,11 +15,18 @@ CHANGED_CONFIGS = [
     "logbegone.json", "modernfix-mixins.properties", "wnl_dhsmooth.properties",
     "calmtheleaks-common.toml", "almostunified", "spark",
 ]
-# The server now receives the ENTIRE config/ tree (see server-upload below) so no server-relevant
-# config is ever missed. EXCLUDE_SERVER_CONFIG_DIRS is an optional knob: list top-level config/
-# entries to OMIT from the server bundle (e.g. purely-client rendering configs) for a leaner
-# upload. Empty = copy everything (safest; the dedicated server simply ignores inert client configs).
-EXCLUDE_SERVER_CONFIG_DIRS = set()
+# The server bundle carries ONLY the configs WE actually tune (+ the Paxi loot datapack we
+# regenerate) -- not the whole config/ tree -- so every update is a small, reviewable delta to
+# upload to DatHost. Untouched configs were uploaded once at setup and don't need re-pushing.
+# (For a FRESH server install with the complete config/, use build_server_pack.py instead.)
+SERVER_TUNED_CONFIGS = [
+    # shared/server-relevant tuned values
+    "DistantHorizons.toml", "dynamic_difficulty-common.toml", "logbegone.json",
+    "calmtheleaks-common.toml", "modernfix-mixins.properties", "spark", "almostunified",
+    # server-side tunes
+    "minecolonies-server.toml", "doespotatotick-common.toml", "entityculling.json",
+    "perf_tweaks", "moreculling.toml", "subtle_effects",
+]
 # server-relevant custom mods (worldgen/server-side) -- DHSmooth is client-only and excluded
 SERVER_MODS = ["WNL-PackFixes-", "WNL-MineColoniesCache-",
                "WNL-ArchersAttrFix-", "WNL-FTBChunksOffload-"]
@@ -67,13 +74,19 @@ def main():
     # inert client-only configs, so copying everything guarantees every server-relevant config
     # (worldgen, difficulty/levelling, registry, *-common.toml, *-server.toml) AND the Paxi
     # WNL-Compat datapack at config/paxi/datapacks/ are present and in sync — nothing missed.
-    if EXCLUDE_SERVER_CONFIG_DIRS:
-        for entry in sorted(os.listdir(os.path.join(ROOT, "config"))):
-            if entry in EXCLUDE_SERVER_CONFIG_DIRS:
-                continue
-            cp(os.path.join(ROOT, "config", entry), os.path.join(su, "config", entry))
-    else:
-        cp(os.path.join(ROOT, "config"), os.path.join(su, "config"))
+    # only the configs we tune
+    for c in SERVER_TUNED_CONFIGS:
+        s = os.path.join(ROOT, "config", c)
+        if os.path.exists(s):
+            cp(s, os.path.join(su, "config", c))
+    # + the Paxi loot datapack we regenerate (WNL-Compat) and its load order
+    if os.path.isdir(os.path.join(ROOT, "config", "paxi", "datapacks", "WNL-Compat")):
+        cp(os.path.join(ROOT, "config", "paxi", "datapacks", "WNL-Compat"),
+           os.path.join(su, "config", "paxi", "datapacks", "WNL-Compat"))
+    for lo in ("datapack_load_order.json", "resourcepack_load_order.json"):
+        s = os.path.join(ROOT, "config", "paxi", lo)
+        if os.path.exists(s):
+            cp(s, os.path.join(su, "config", "paxi", lo))
     su_cfg = os.path.join(su, "config")
     n["config_server"] = sum(len(fs) for _, _, fs in os.walk(su_cfg)) if os.path.isdir(su_cfg) else 0
 
