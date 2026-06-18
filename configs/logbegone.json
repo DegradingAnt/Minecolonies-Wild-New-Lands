@@ -86,7 +86,13 @@
       "with no branch blocks. This shouldn't be possible",
       "ColorMultiplier resource",
       "Error while parsing the block ID map entry",
-      "BakedAnimationsAdapter"
+      "BakedAnimationsAdapter",
+      "Unknown resource condition key: fabric:",
+      "Integrated API Error: Couldn't parse spawner mob list",
+      "uses outdated modproperties format",
+      "could not be found.",
+      "specified in data map for registry",
+      "fruitsdelight:emptying"
     ],
     "regex": [
       "Disconnecting VANILLA connection attempt",
