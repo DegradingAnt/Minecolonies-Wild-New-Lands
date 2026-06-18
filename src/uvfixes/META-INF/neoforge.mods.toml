@@ -4,7 +4,7 @@ license="MIT"
 [[mods]]
 modId="ultimatevibes_packfixes"
 version="1.16.0"
-displayName="Ultimate Vibes Pack Fixes (Custom Coremod)"
+displayName="WNL Pack Fixes (Custom Coremod)"
 authors="linde"
 description='''
 Runtime bytecode fixes for this pack, applied at class-load time so original mod jars stay untouched:

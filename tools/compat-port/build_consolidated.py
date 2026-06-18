@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Consolidate the 5 UltimateVibes Paxi datapacks into ONE publishable datapack.
-- Merges data/ trees from all source packs into UltimateVibes-Compat/.
+- Merges data/ trees from all source packs into WNL-Compat/.
 - PRUNES files whose top namespace is a removed mod (absent), keeping my own
   namespaces (uvfixes) and hyphen/underscore modId variants (hybrid-aquatic).
 - Detects path collisions (same data path in 2 packs w/ different content).
@@ -12,11 +12,11 @@ import json, os, shutil, hashlib, collections
 ROOT = r"C:/Users/linde/curseforge/minecraft/Instances/Ultimate vibes distant horizons version"
 DPDIR = os.path.join(ROOT, "config/paxi/datapacks")
 SRC_DIR = os.path.join(ROOT, ".uvrun/datapack-backups/pre-consolidation")  # sources moved here on 1st run
-OUT_NAME = "UltimateVibes-Compat"
+OUT_NAME = "WNL-Compat"
 OUT = os.path.join(DPDIR, OUT_NAME)
 MODS = os.path.join(ROOT, "mods")
 # load order = priority low->high; later overrides earlier. Merge keeps highest-priority on collision.
-SOURCES = ["UltimateVibes-Structures", "UltimateVibes-CompatPort", "UltimateVibes-BetterCombatWeapons",
+SOURCES = ["UltimateVibes-Structures", "WNL-CompatPort", "UltimateVibes-BetterCombatWeapons",
            "UltimateVibes-CroptopiaBotanyPots", "UltimateVibes-DataFixes"]  # last = wins collisions
 
 VANILLA = {"minecraft", "c", "forge", "neoforge", "fabric", "common", "fml", "mod"}

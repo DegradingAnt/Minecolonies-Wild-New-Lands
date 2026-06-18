@@ -10,7 +10,7 @@ from collections import defaultdict
 
 ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 MODS = os.path.join(ROOT, "mods")
-DP_FOODS = os.path.join(ROOT, "config", "paxi", "datapacks", "UltimateVibes-Compat", "data", "c", "tags", "item", "foods")
+DP_FOODS = os.path.join(ROOT, "config", "paxi", "datapacks", "WNL-Compat", "data", "c", "tags", "item", "foods")
 AU = os.path.join(ROOT, "config", "almostunified")
 
 FOOD_MODS = set("""croptopia farmersdelight abnormals_delight chefsdelight cuisinedelight

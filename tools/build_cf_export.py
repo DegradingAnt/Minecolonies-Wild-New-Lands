@@ -4,7 +4,7 @@
   mods/ jar that CF fingerprint-matched AND we did not author/modify.
 - overrides/mods = our authored/modified jars (UltimateVibes-*, repackaged supplemental_patches,
   any sideloaded jar with no CF match) so the pack is self-contained + license-clean.
-- overrides/ = config (incl. the consolidated UltimateVibes-Compat datapack) + resourcepacks +
+- overrides/ = config (incl. the consolidated WNL-Compat datapack) + resourcepacks +
   options.txt + defaultconfigs. Junk (.uvrun/.claude/logs/saves/DH cache) excluded.
 LICENSING: we only redistribute our OWN jars in overrides/mods; CF mods download from CF."""
 import json, os, zipfile, shutil

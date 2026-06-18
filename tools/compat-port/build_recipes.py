@@ -4,13 +4,13 @@ Each entry is a recipe the mod shipped in a format the 1.21.1 RecipeManager reje
 it at higher (datapack) priority with a CORRECTED, content-preserving version where the intent is
 clear, or a parse-valid no-op deletion (neoforge:false) only where the source is unfixable.
 
-Writes to config/paxi/datapacks/UltimateVibes-CompatPort/ at BOTH recipe/ (1.21.1) and recipes/.
+Writes to config/paxi/datapacks/WNL-CompatPort/ at BOTH recipe/ (1.21.1) and recipes/.
 Re-run after a pack update if harvest_log.py reports new RecipeManager parse errors; add the new
 recipe + its corrected form here (read the pristine recipe from the jar first to preserve intent)."""
 import json, os
 
 ROOT = r"C:/Users/linde/curseforge/minecraft/Instances/Ultimate vibes distant horizons version"
-OUT  = os.path.join(ROOT, "config/paxi/datapacks/UltimateVibes-Compat")
+OUT  = os.path.join(ROOT, "config/paxi/datapacks/WNL-Compat")
 
 # --- helpers for the two recurring shapes ---
 def fd_cut(ingredients, results, tool_tag="c:tools/knives", conditions=None):

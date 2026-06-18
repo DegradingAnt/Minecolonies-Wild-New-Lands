@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Disable worldgen for ATO materials that nothing outside ATO consumes (audit_ato_v2.py).
 Overrides each dead material's NeoForge biome_modifier (overworld/nether/end) with
-{"type":"neoforge:none"} in UltimateVibes-Compat -> higher datapack priority shadows ATO's
+{"type":"neoforge:none"} in WNL-Compat -> higher datapack priority shadows ATO's
 add_features modifier -> ore stops generating. Items stay registered (just unobtainable via
 worldgen); ride in the same datapack the server already copies.
 """
@@ -11,7 +11,7 @@ DEAD = ["cinnabar", "fluorite", "iridium", "osmium", "peridot", "platinum", "rub
 DIMS = ["overworld", "nether", "end"]
 
 OUT = os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
-        "config", "paxi", "datapacks", "UltimateVibes-Compat",
+        "config", "paxi", "datapacks", "WNL-Compat",
         "data", "alltheores", "neoforge", "biome_modifier"))
 os.makedirs(OUT, exist_ok=True)
 

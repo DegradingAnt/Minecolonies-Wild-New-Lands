@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Generate convention-tag normalization for split food ingredients into the
-UltimateVibes-Compat Paxi datapack, so AlmostUnified unifies each split ingredient
+WNL-Compat Paxi datapack, so AlmostUnified unifies each split ingredient
 to the Croptopia canon consistently AND tag-based recipes still accept the canon.
 
 For each SPLIT ingredient, every listed category tag gets the FULL real-variant set
@@ -15,7 +15,7 @@ unifies to croptopia automatically (already co-tagged).
 import os, json
 
 DP = os.path.join(os.path.dirname(__file__), "..",
-                  "config", "paxi", "datapacks", "UltimateVibes-Compat",
+                  "config", "paxi", "datapacks", "WNL-Compat",
                   "data", "c", "tags", "item")
 DP = os.path.abspath(DP)
 

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Seeds Phase B, approach A: unify duplicate plantable seeds to the Croptopia seed.
-Writes c:seeds/<crop> tag files (full variant set) into UltimateVibes-Compat so AU
+Writes c:seeds/<crop> tag files (full variant set) into WNL-Compat so AU
 unifies them (mod_priorities [minecraft, croptopia] -> croptopia seed canonical).
 Light touch: JEI/recipe unification only; each mod's farm still grows its own crop
 (no loot_unification). Tree-seeds (cherry/lemon/date) deliberately EXCLUDED (different
@@ -9,7 +9,7 @@ plant/growth). roasted_sunflower (a food) handled in the prepared-food pass.
 import os, json
 
 DP = os.path.abspath(os.path.join(os.path.dirname(__file__), "..",
-        "config", "paxi", "datapacks", "UltimateVibes-Compat", "data", "c", "tags", "item", "seeds"))
+        "config", "paxi", "datapacks", "WNL-Compat", "data", "c", "tags", "item", "seeds"))
 os.makedirs(DP, exist_ok=True)
 
 SEEDS = {

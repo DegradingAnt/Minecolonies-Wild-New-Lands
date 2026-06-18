@@ -14,7 +14,7 @@ a cleaned override into a Paxi datapack. No jar editing.
 import json, os, re, zipfile, sys
 
 ROOT = r"C:/Users/linde/curseforge/minecraft/Instances/Ultimate vibes distant horizons version"
-OUT  = os.path.join(ROOT, "config/paxi/datapacks/UltimateVibes-Compat")
+OUT  = os.path.join(ROOT, "config/paxi/datapacks/WNL-Compat")
 
 # table-namespace -> owning jar is AUTO-RESOLVED from mods/ (scan for the jar that owns
 # data/<ns>/loot_table(s)/) so this survives pack updates without manual edits.

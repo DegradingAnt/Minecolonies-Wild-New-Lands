@@ -5,9 +5,9 @@ license = "MIT"
 [[mods]]
 modId = "uvftbchunks"
 version = "1.0.0"
-displayName = "UltimateVibes FTB Chunks Map-Save Offload"
-authors = "UltimateVibes"
-description = '''Moves FTB Chunks' MapRegionData.write() snapshot (5x 512x512 BufferedImage alloc + ~1.3M setRGB) off the render thread onto FTB Chunks' own MAP_EXECUTOR background thread, removing the periodic 60s-autosave / pause-screen render-thread spikes. Delete this jar to remove the feature. Addon to UltimateVibes-PackFixes.'''
+displayName = "WNL FTB Chunks Map-Save Offload"
+authors = "WNL"
+description = '''Moves FTB Chunks' MapRegionData.write() snapshot (5x 512x512 BufferedImage alloc + ~1.3M setRGB) off the render thread onto FTB Chunks' own MAP_EXECUTOR background thread, removing the periodic 60s-autosave / pause-screen render-thread spikes. Delete this jar to remove the feature. Addon to WNL-PackFixes.'''
 
 [[mixins]]
 config = "uvftbchunks.mixins.json"

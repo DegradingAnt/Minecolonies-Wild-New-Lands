@@ -5,9 +5,9 @@ license = "MIT"
 [[mods]]
 modId = "jeiboost"
 version = "1.2.0"
-displayName = "UltimateVibes JEIBoost"
-authors = "UltimateVibes"
-description = '''Parallel JEI plugin registration + join-time caches for the Ultimate Vibes pack. Addon to UltimateVibes-PackFixes — delete this jar to remove the feature. Parallel recipe/filter phases (pinned plugins and failures run on the main thread) plus a disk cache of the creative-tab ingredient scan that saves ~10s per world join after the first.'''
+displayName = "WNL JEIBoost"
+authors = "WNL"
+description = '''Parallel JEI plugin registration + join-time caches for the WNL pack. Addon to WNL-PackFixes — delete this jar to remove the feature. Parallel recipe/filter phases (pinned plugins and failures run on the main thread) plus a disk cache of the creative-tab ingredient scan that saves ~10s per world join after the first.'''
 
 [[mixins]]
 config = "jeiboost.mixins.json"

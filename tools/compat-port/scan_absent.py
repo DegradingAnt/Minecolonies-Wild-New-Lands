@@ -12,7 +12,7 @@ import json, os, re, zipfile, collections
 ROOT = r"C:/Users/linde/curseforge/minecraft/Instances/Ultimate vibes distant horizons version"
 MODS = os.path.join(ROOT, "mods")
 DPDIR = os.path.join(ROOT, "config/paxi/datapacks")
-MY_PACKS = ["UltimateVibes-CompatPort", "UltimateVibes-DataFixes", "UltimateVibes-Structures",
+MY_PACKS = ["WNL-CompatPort", "UltimateVibes-DataFixes", "UltimateVibes-Structures",
             "UltimateVibes-CroptopiaBotanyPots", "UltimateVibes-BetterCombatWeapons"]
 
 VANILLA = {"minecraft", "c", "forge", "neoforge", "fabric", "common", "fml", "mod"}
