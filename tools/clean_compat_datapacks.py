@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# !! DO NOT RUN on CurseForge-managed datapacks -- editing them breaks CF integrity checks (corrupted/changed). Reverted 2026-06-18. !!
 """Strip dead references to NOT-INSTALLED mods out of the global compat datapacks
 (datapacks/*.zip). These third-party 'X Compat' packs ship tag entries + recipes for
 mods this pack doesn't have -> NeoForge 'tags are a bit cooked' chat spam + recipe-load
