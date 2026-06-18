@@ -12,7 +12,7 @@ OUT = sys.argv[1] if len(sys.argv) > 1 else r"C:\Users\linde\Desktop\WNL-Pack-Ex
 # config files/dirs that are intentionally tuned for this pack (the "changed configs")
 CHANGED_CONFIGS = [
     "DistantHorizons.toml", "dynamic_difficulty-common.toml", "entity_model_features.json",
-    "logbegone.json", "modernfix-mixins.properties", "uvdhsmooth.properties",
+    "logbegone.json", "modernfix-mixins.properties", "wnl_dhsmooth.properties",
     "calmtheleaks-common.toml", "almostunified", "spark",
 ]
 # configs that ALSO belong on the dedicated server (worldgen / server-side mods)

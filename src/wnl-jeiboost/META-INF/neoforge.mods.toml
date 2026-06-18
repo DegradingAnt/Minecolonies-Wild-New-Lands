@@ -1,0 +1,34 @@
+modLoader = "javafml"
+loaderVersion = "[4,)"
+license = "MIT"
+
+[[mods]]
+modId = "wnl_jeiboost"
+version = "1.2.1"
+displayName = "WNL JEIBoost"
+authors = "WNL"
+description = '''Parallel JEI plugin registration + join-time caches for the WNL pack. Addon to WNL-PackFixes — delete this jar to remove the feature. Parallel recipe/filter phases (pinned plugins and failures run on the main thread) plus a disk cache of the creative-tab ingredient scan that saves ~10s per world join after the first.'''
+
+[[mixins]]
+config = "wnl_jeiboost.mixins.json"
+
+[[dependencies."wnl_jeiboost"]]
+modId = "neoforge"
+type = "required"
+versionRange = "[21,)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies."wnl_jeiboost"]]
+modId = "minecraft"
+type = "required"
+versionRange = "[1.21.1,1.22)"
+ordering = "NONE"
+side = "BOTH"
+
+[[dependencies."wnl_jeiboost"]]
+modId = "jei"
+type = "required"
+versionRange = "[19.0.0,)"
+ordering = "AFTER"
+side = "CLIENT"
