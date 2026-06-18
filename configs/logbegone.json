@@ -84,7 +84,9 @@
       "Failed to add item attribute modifier: No value present",
       "Tried to create a EntityFallingTree with no branch",
       "with no branch blocks. This shouldn't be possible",
-      "ColorMultiplier resource"
+      "ColorMultiplier resource",
+      "Error while parsing the block ID map entry",
+      "BakedAnimationsAdapter"
     ],
     "regex": [
       "Disconnecting VANILLA connection attempt",
