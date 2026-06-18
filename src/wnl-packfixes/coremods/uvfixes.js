@@ -1753,6 +1753,39 @@ function initializeCoreMod() {
                 return classNode;
             }
         },
+        // Fix 45: more_rpg_classes FrostedParticles.spawnParticles -> spell_engine ParticleHelper.play
+        // hands a NULL ParticleOptions into ClientLevel.addParticle when a living entity carries a frost
+        // status effect. addParticle then calls particle.getType() on null -> NPE, ~20x per burst. Neruina
+        // catches it (no crash) but it floods STDERR every frost tick. Guard: HEAD null-check on the
+        // addParticle(ParticleOptions,boolean,double*6) overload -- the chokepoint the simpler overloads
+        // delegate to -- returns immediately when the ParticleOptions is null. A null particle never
+        // renders, so this is a pure no-op for the broken call; every valid (non-null) particle is
+        // completely unaffected. General: silences any mod that fires a null particle, not just frost.
+        'uvfixes_clientlevel_skip_null_particle': {
+            'target': { 'type': 'CLASS', 'name': 'net.minecraft.client.multiplayer.ClientLevel' },
+            'transformer': function (classNode) {
+                var DESC = '(Lnet/minecraft/core/particles/ParticleOptions;ZDDDDDD)V';
+                var done = false;
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    if (!m.name.equals('addParticle') || !m.desc.equals(DESC)) continue;
+                    if (m.instructions.size() === 0) break;
+                    var list = new InsnList();
+                    var cont = new LabelNode();
+                    list.add(new VarInsnNode(Opcodes.ALOAD, 1));          // ParticleOptions param0 (slot 1)
+                    list.add(new JumpInsnNode(Opcodes.IFNONNULL, cont));  // non-null -> run original body
+                    list.add(new InsnNode(Opcodes.RETURN));              // null -> no-op (void)
+                    list.add(cont);
+                    m.instructions.insert(list);                          // prepend at method head
+                    if (m.maxStack < 1) m.maxStack = 1;
+                    done = true;
+                    break;
+                }
+                log(done ? 'ClientLevel.addParticle null-particle guard applied (null ParticleOptions no-ops instead of NPE -> silences more_rpg_classes/spell_engine FrostedParticles STDERR spam)'
+                         : 'ClientLevel: addParticle(ParticleOptions,Z,D6)V not found, patch skipped (MC/mappings changed?)');
+                return classNode;
+            }
+        },
     };
 }
 

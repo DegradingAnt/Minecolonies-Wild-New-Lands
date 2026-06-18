@@ -14,6 +14,10 @@ CHANGED_CONFIGS = [
     "DistantHorizons.toml", "dynamic_difficulty-common.toml", "entity_model_features.json",
     "logbegone.json", "modernfix-mixins.properties", "wnl_dhsmooth.properties",
     "calmtheleaks-common.toml", "almostunified", "spark",
+    # client-side RENDERING fixes a co-op partner also needs for matching visuals:
+    # moreculling.toml carries useBlockStateCulling=false (fixes domum_ornamentum slabs
+    # rendering see-through); subtle_effects + entityculling keep visuals/culling identical.
+    "moreculling.toml", "subtle_effects", "entityculling.json",
 ]
 # The server bundle carries ONLY the configs WE actually tune (+ the Paxi loot datapack we
 # regenerate) -- not the whole config/ tree -- so every update is a small, reviewable delta to
@@ -79,6 +83,18 @@ def main():
         s = os.path.join(ROOT, "config", c)
         if os.path.exists(s):
             cp(s, os.path.join(su, "config", c))
+    # DH OFFLOAD: the dedicated server does ALL distant LOD generation (clients can't
+    # self-generate on a dedicated server; they pull finished LODs via enableServerGeneration).
+    # The client config keeps numberOfThreads=3, but the SERVER copy is bumped so it uses its
+    # spare cores (8 active, ~16% used) to generate/serve LODs faster -> less client wait.
+    # Only the server bundle's copy is modified; the user's live client config is untouched.
+    su_dh = os.path.join(su, "config", "DistantHorizons.toml")
+    if os.path.isfile(su_dh):
+        import re as _re
+        _t = open(su_dh, encoding="utf-8").read()
+        _t = _re.sub(r"numberOfThreads\s*=\s*\d+", "numberOfThreads = 6", _t)
+        _t = _re.sub(r"enableDistantGeneration\s*=\s*\w+", "enableDistantGeneration = true", _t)
+        open(su_dh, "w", encoding="utf-8").write(_t)
     # + the Paxi loot datapack we regenerate (WNL-Compat) and its load order
     if os.path.isdir(os.path.join(ROOT, "config", "paxi", "datapacks", "WNL-Compat")):
         cp(os.path.join(ROOT, "config", "paxi", "datapacks", "WNL-Compat"),

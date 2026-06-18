@@ -25,7 +25,7 @@ CURATED = [
     "embeddium", "oculus", "rubidium", "nvidium", "iris-", "sodium-", "partic5", "particull",
     "particlerain", "asyncparticles", "lambdynamiclights", "lambdynlights", "subtle_effects",
     "fancymenu", "drippyloadingscreen", "puzzlesaccesspoint", "dynamic_resource_bars",
-    "immersiveoverlays", "appleskin", "bobby", "betterclouds", "complementary",
+    "immersiveoverlays", "appleskin", "bobby", "betterclouds", "complementary", "rpc-", "resourcepackcached",
 ]
 
 def declares_client_only(jar):
