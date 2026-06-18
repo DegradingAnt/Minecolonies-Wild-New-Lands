@@ -15,9 +15,11 @@ CHANGED_CONFIGS = [
     "logbegone.json", "modernfix-mixins.properties", "wnl_dhsmooth.properties",
     "calmtheleaks-common.toml", "almostunified", "spark",
 ]
-# configs that ALSO belong on the dedicated server (worldgen / server-side mods)
-SERVER_CONFIGS = ["calmtheleaks-common.toml", "logbegone.json", "DistantHorizons.toml",
-                  "dynamic_difficulty-common.toml", "spark"]
+# The server now receives the ENTIRE config/ tree (see server-upload below) so no server-relevant
+# config is ever missed. EXCLUDE_SERVER_CONFIG_DIRS is an optional knob: list top-level config/
+# entries to OMIT from the server bundle (e.g. purely-client rendering configs) for a leaner
+# upload. Empty = copy everything (safest; the dedicated server simply ignores inert client configs).
+EXCLUDE_SERVER_CONFIG_DIRS = set()
 # server-relevant custom mods (worldgen/server-side) -- DHSmooth is client-only and excluded
 SERVER_MODS = ["WNL-PackFixes-", "WNL-MineColoniesCache-",
                "WNL-ArchersAttrFix-", "WNL-FTBChunksOffload-"]
@@ -35,7 +37,7 @@ def main():
     if os.path.isdir(OUT):
         shutil.rmtree(OUT)
     os.makedirs(OUT)
-    n = {"mods": 0, "config": 0, "datapacks": 0, "rp": 0, "server": 0}
+    n = {"mods": 0, "config": 0, "datapacks": 0, "rp": 0, "server": 0, "config_server": 0}
 
     # ---- instance-overlay (client drop-in) ----
     ov = os.path.join(OUT, "instance-overlay")
@@ -53,21 +55,27 @@ def main():
     for z in glob.glob(os.path.join(ROOT, "resourcepacks", "WNL-*.zip")):
         cp(z, os.path.join(ov, "resourcepacks", os.path.basename(z))); n["rp"] += 1
 
-    # ---- server-upload (DatHost) ----
+    # ---- server-upload (DatHost): mirrors the server root = mods/ + FULL config/ ----
     su = os.path.join(OUT, "server-upload")
     for j in glob.glob(os.path.join(ROOT, "mods", "WNL-*.jar")):
         if any(os.path.basename(j).startswith(p) for p in SERVER_MODS):
-            cp(j, os.path.join(su, os.path.basename(j))); n["server"] += 1
+            cp(j, os.path.join(su, "mods", os.path.basename(j))); n["server"] += 1
     # patched DH server jar from prior server-delivery if present
     for dh in glob.glob(os.path.join(ROOT, ".uvrun", "server-delivery", "DistantHorizons-*.jar")):
-        cp(dh, os.path.join(su, os.path.basename(dh)))
-    if os.path.isdir(os.path.join(ROOT, "config", "paxi", "datapacks", "WNL-Compat")):
-        cp(os.path.join(ROOT, "config", "paxi", "datapacks", "WNL-Compat"),
-           os.path.join(su, "WNL-Compat"))
-    for c in SERVER_CONFIGS:
-        s = os.path.join(ROOT, "config", c)
-        if os.path.exists(s):
-            cp(s, os.path.join(su, "config", c))
+        cp(dh, os.path.join(su, "mods", os.path.basename(dh)))
+    # ALL relevant configs: mirror the ENTIRE config/ tree. The dedicated server simply ignores
+    # inert client-only configs, so copying everything guarantees every server-relevant config
+    # (worldgen, difficulty/levelling, registry, *-common.toml, *-server.toml) AND the Paxi
+    # WNL-Compat datapack at config/paxi/datapacks/ are present and in sync — nothing missed.
+    if EXCLUDE_SERVER_CONFIG_DIRS:
+        for entry in sorted(os.listdir(os.path.join(ROOT, "config"))):
+            if entry in EXCLUDE_SERVER_CONFIG_DIRS:
+                continue
+            cp(os.path.join(ROOT, "config", entry), os.path.join(su, "config", entry))
+    else:
+        cp(os.path.join(ROOT, "config"), os.path.join(su, "config"))
+    su_cfg = os.path.join(su, "config")
+    n["config_server"] = sum(len(fs) for _, _, fs in os.walk(su_cfg)) if os.path.isdir(su_cfg) else 0
 
     stamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M")
     with open(os.path.join(OUT, "README.txt"), "w", encoding="utf-8") as f:
@@ -78,9 +86,10 @@ def main():
             "instance-overlay/  -> drop into your client instance (merge mods/, config/,\n"
             f"   datapacks/, resourcepacks/). Custom mods: {n['mods']}, changed configs: {n['config']},\n"
             f"   global datapacks: {n['datapacks']}, resourcepacks: {n['rp']}.\n"
-            "server-upload/     -> upload to the DatHost server's mods/ (worldgen + server fixes)\n"
-            f"   + the WNL-Compat datapack. Server custom mods: {n['server']}.\n"
-            "   (DHSmooth is client-only and intentionally NOT here.)\n\n"
+            "server-upload/     -> mirrors the server root: merge mods/ + config/ onto the DatHost\n"
+            f"   server. Server custom mods: {n['server']}, server config files: {n['config_server']}\n"
+            "   (FULL config/ tree incl. the Paxi WNL-Compat datapack at config/paxi/datapacks/).\n"
+            "   DHSmooth is client-only and intentionally NOT in mods/.\n\n"
             "This bundle is regenerated automatically at the end of each session.\n"
         )
     print(f"EXPORT OK -> {OUT}")
