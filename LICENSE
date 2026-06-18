@@ -21,8 +21,8 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 
 ---
-NOTE: This repository holds the *custom* WNL add-on mods, tooling, configs, and
-the WNL-Compat datapack. The `datapacks/WNL-Compat/` directory consolidates
-cross-mod compatibility data; portions derived from third-party community
-compat packs remain under their respective original licenses (see any LICENSE
-files within that directory). No third-party mod jars are included.
+NOTE: This repository holds ONLY original work for the "Minecolonies: Wild New
+Lands 2" pack — the custom WNL add-on mods (source + builds), tooling, custom
+resourcepacks, and tuned configuration values. It contains no third-party mod
+jars, assets, or copied datapack content; the MIT license above covers this
+custom work.
