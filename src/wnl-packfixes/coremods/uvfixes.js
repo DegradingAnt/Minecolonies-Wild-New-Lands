@@ -1712,6 +1712,47 @@ function initializeCoreMod() {
                 return classNode;
             }
         },
+        // Fix 44: server DISCONNECTS from client<->server MOD DRIFT. When the server syncs an entity
+        // whose mod set registers a SynchedEntityData field N with a DIFFERENT serializer than the
+        // client has (e.g. a mod auto-updated on the client but not the server -> field 15 is Boolean
+        // server-side but Integer client-side), SynchedEntityData.assignValue throws IllegalStateException
+        // "Invalid entity data item type for field %d ...". That propagates out of assignValues, the
+        // ClientboundSetEntityDataPacket handler fails -> "Network Protocol Error" -> the client is
+        // disconnected, and re-disconnected on rejoin (the same entities reload). FIX: wrap assignValue's
+        // whole body in try { ... } catch (Throwable) { return; } so an un-applyable field is SKIPPED (its
+        // value just stays the client default) instead of aborting the entire entity-sync packet. Valid
+        // fields in the same packet still apply (assignValues loops; each assignValue call is independent;
+        // a normal matching field never reaches the handler -> behaviour unchanged). Silent at runtime by
+        // design -- a mismatch can recur every entity tick, so no log spam; the boot-time
+        // "[uvfixes] ... guard applied" line confirms it's installed. Client-side relief for the drift
+        // symptom; the real cure is matching client+server mod versions. Does NOT cover an out-of-range
+        // field id (server has MORE fields than client -> AIOOBE in assignValues itself) -- not the
+        // observed case; add an assignValues per-iteration guard if that ever appears.
+        'uvfixes_synched_entity_data_skip_bad_field': {
+            'target': { 'type': 'CLASS', 'name': 'net.minecraft.network.syncher.SynchedEntityData' },
+            'transformer': function (classNode) {
+                var DESC = '(Lnet/minecraft/network/syncher/SynchedEntityData$DataItem;Lnet/minecraft/network/syncher/SynchedEntityData$DataValue;)V';
+                var done = false;
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    if (!m.name.equals('assignValue') || !m.desc.equals(DESC)) continue;
+                    if (m.instructions.size() === 0) break;
+                    var L_start = new LabelNode();
+                    var L_handler = new LabelNode();
+                    m.instructions.insert(L_start);             // try {  (at method head)
+                    m.instructions.add(L_handler);              // } catch (Throwable t) {
+                    m.instructions.add(new InsnNode(Opcodes.POP));    //   discard the exception
+                    m.instructions.add(new InsnNode(Opcodes.RETURN)); //   skip this field (void)  }
+                    m.tryCatchBlocks.add(new TryCatchBlockNode(L_start, L_handler, L_handler, 'java/lang/Throwable'));
+                    if (m.maxStack < 2) m.maxStack = 2;
+                    done = true;
+                    break;
+                }
+                log(done ? 'SynchedEntityData.assignValue guard applied (type-mismatched entity-data field skipped, not thrown -> no Network-Protocol-Error disconnect under client/server mod drift)'
+                         : 'SynchedEntityData: assignValue(DataItem,DataValue)V not found, patch skipped (MC/mappings changed?)');
+                return classNode;
+            }
+        },
     };
 }
 

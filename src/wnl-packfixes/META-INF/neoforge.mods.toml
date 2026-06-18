@@ -3,7 +3,7 @@ loaderVersion="[4,)"
 license="MIT"
 [[mods]]
 modId="wnl_packfixes"
-version="1.30.0"
+version="1.31.0"
 displayName="WNL Pack Fixes (Custom Coremod)"
 authors="linde"
 description='''
@@ -26,5 +26,6 @@ Runtime bytecode fixes for this pack, applied at class-load time so original mod
 - wakes 1.3.6: intermittent tick-1 crash. WakeClientTicker.onClientTick touches WakeHandler whose <clinit> reads WakesConfig.APPEARANCE.wakeResolution.get() at class-init; on a config-load race (tick 1 before the mod config loads) that throws "Cannot get config value before config is loaded" -> ExceptionInInitializerError -> crash. Both static event handlers (onClientTick + onLevelUnload) are wrapped in try/catch(Throwable)->return, so on the rare race wakes' water ripples self-disable for that session instead of crashing; non-race sessions are 100% unaffected.
 - dungeoncrawl 2.3.17: DungeonModelBlock$PropertyHolder.apply(BlockState) is wrapped in try/catch(Throwable) returning the input state unchanged. It did state.setValue(this.property, this.value) guarded by hasProperty() but NOT by a null-check on the value; for some placed blocks (seen: mossy_cobblestone_stairs) the resolved value is null, so setValue(waterlogged, null) threw IllegalArgumentException -> "Feature placement" ReportedException -> the chunk failed its "features" stage -> "Failed to load chunk" during worldgen. Now a null/invalid property is skipped (the dungeon block keeps its default state, e.g. a stair stays non-waterlogged) and the chunk generates. Server-relevant (worldgen).
 - structurize 1.0.831 x domum_ornamentum x minecolonies: ItemStackUtils.getItemStacksOfTileEntity is wrapped in try/catch(Throwable) returning Collections.emptyList(). MineColonies builders compute a building's required items by deserializing each saved block-entity; if a colony/blueprint block carries a DO materially_retexturable block-entity on a non-DO block (seen: white_concrete/cobblestone -- style-pack/version data mismatch), BlockEntity.validateBlockState throws "Invalid block entity ... got Block{...}", which propagated up the CitizenAI state machine and left the builder STUCK. Now the malformed TE yields no items and the builder keeps building (the bad block places as its plain block). Server-side.
+- SynchedEntityData.assignValue (vanilla): skips a type-mismatched entity-data field instead of throwing. Under client<->server mod drift (a mod updated on the client but not the server registers a synched field with a different type), the server's entity-sync packet would otherwise abort with "Invalid entity data item type" -> the client disconnects with "Network Protocol Error". The guard makes the bad field no-op (stays client-default) so valid fields still apply and the player stays connected.
 Each fix logs "[uvfixes] ..." and safely no-ops if a mod update changes the target.
 '''

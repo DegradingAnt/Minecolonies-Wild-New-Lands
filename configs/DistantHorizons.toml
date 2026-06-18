@@ -122,7 +122,7 @@ _version = 4
 				#     '0' equals to Vanilla Biome Blending of '1x1' or 'OFF', 
 				#     '1' equals to Vanilla Biome Blending of '3x3', 
 				#     '2' equals to Vanilla Biome Blending of '5x5'...
-				lodBiomeBlending = 2
+				lodBiomeBlending = 1
 				#
 				# If true DH will try to use the camera position when 
 				# determining LOD quality drop-off. 
