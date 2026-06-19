@@ -1786,6 +1786,43 @@ function initializeCoreMod() {
                 return classNode;
             }
         },
+        // Fix 46: structurize Blueprint "World mismatch" crash on reconnect. Blueprint.setRotationMirrorRelative
+        // does `if (level.registryAccess() != this.registryAccess) throw IllegalStateException("World mismatch")`
+        // -- an over-strict reference-IDENTITY check. After a disconnect+reconnect to the same server the new
+        // ClientLevel's registryAccess is content-identical but a DIFFERENT object, so an active build preview
+        // whose Blueprint is still bound to the dead level throws here (render thread, via
+        // BlueprintPreviewData.getBlueprint -> setBlueprint -> applyRotationMirrorAndSync) -> hard client crash.
+        // (uvmccache 1.1.0 already flushes ColonyBlueprintRenderer.blueprintDataCache on logout, but
+        // BlueprintPreviewData is a SEPARATE stale-blueprint holder it doesn't cover.) The throw is the FIRST
+        // thing the method does (before any mutation), so wrapping the body in try/catch(IllegalStateException)
+        // -> return cleanly skips the rotation for that stale preview instead of crashing; the preview self-heals
+        // when the player re-selects a building (a fresh Blueprint replaces the stale one). Real placement is
+        // unaffected -- the check only fires on a genuine level mismatch, which now no-ops instead of crashing.
+        'uvfixes_structurize_blueprint_world_mismatch_guard': {
+            'target': { 'type': 'CLASS', 'name': 'com.ldtteam.structurize.blueprints.v1.Blueprint' },
+            'transformer': function (classNode) {
+                var DESC = '(Lcom/ldtteam/structurize/api/RotationMirror;Lnet/minecraft/world/level/Level;)V';
+                var done = false;
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    if (!m.name.equals('setRotationMirrorRelative') || !m.desc.equals(DESC)) continue;
+                    if (m.instructions.size() === 0) break;
+                    var L_start = new LabelNode();
+                    var L_handler = new LabelNode();
+                    m.instructions.insert(L_start);                   // try {  (method head)
+                    m.instructions.add(L_handler);                    // } catch (IllegalStateException e) {
+                    m.instructions.add(new InsnNode(Opcodes.POP));    //   discard the exception
+                    m.instructions.add(new InsnNode(Opcodes.RETURN)); //   skip rotation for the stale preview (void) }
+                    m.tryCatchBlocks.add(new TryCatchBlockNode(L_start, L_handler, L_handler, 'java/lang/IllegalStateException'));
+                    if (m.maxStack < 2) m.maxStack = 2;
+                    done = true;
+                    break;
+                }
+                log(done ? 'structurize Blueprint.setRotationMirrorRelative World-mismatch guard applied (stale build-preview after reconnect no-ops instead of crashing the client)'
+                         : 'structurize Blueprint: setRotationMirrorRelative(RotationMirror,Level)V not found, patch skipped (structurize changed?)');
+                return classNode;
+            }
+        },
     };
 }
 
