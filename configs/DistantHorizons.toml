@@ -30,7 +30,7 @@ _version = 4
 				# 
 				# Higher settings will increase the distance between drops 
 				# but will increase memory and GPU usage.
-				horizontalQuality = "MEDIUM"
+				horizontalQuality = "HIGH"
 				#
 				# What is the maximum detail LODs can render at? 
 				# Higher settings will increase memory and GPU usage. 
@@ -51,25 +51,21 @@ _version = 4
 				# 
 				# Lowest Quality: HEIGHT_MAP
 				# Highest Quality: PIXEL_ART
-				verticalQuality = "MEDIUM"
+				verticalQuality = "HIGH"
+				#
+				# If true DH will try to use the camera position when 
+				# determining LOD quality drop-off. 
+				# If false DH will use the player's position. 
+				#  
+				# Enabling helps free-cam mods render correctly. 
+				# Disabling helps multi-camera mods render correctly (ie Immersive Portals or camera mods).
+				useCameraPositionForQualityDropOff = true
 				#
 				# How should LOD transparency be handled. 
 				# 
 				# COMPLETE: LODs will render transparent. 
 				# DISABLED: LODs will be opaque.
 				transparency = "COMPLETE"
-				#
-				# What blocks shouldn't be rendered as LODs? 
-				# 
-				# NONE: Represent all blocks in the LODs 
-				# NON_COLLIDING: Only represent solid blocks in the LODs (tall grass, torches, etc. won't count for a LOD's height)
-				blocksToIgnore = "NON_COLLIDING"
-				#
-				# Should the blocks underneath avoided blocks gain the color of the avoided block? 
-				# 
-				# True: a red flower will tint the grass below it red. 
-				# False: skipped blocks will not change color of surface below them.
-				tintWithAvoidedBlocks = true
 				#
 				# How should LODs be shaded? 
 				# 
@@ -102,6 +98,14 @@ _version = 4
 				# This is helpful to prevent DH clouds from cutting off in the distance.
 				dhFadeFarClipPlane = true
 				#
+				# This is the same as vanilla Biome Blending settings for Lod area. 
+				#     Note: anything above '0' will slow down LOD loading time. 
+				# 
+				#     '0' equals to Vanilla Biome Blending of '1x1' or 'OFF', 
+				#     '1' equals to Vanilla Biome Blending of '3x3', 
+				#     '2' equals to Vanilla Biome Blending of '5x5'...
+				lodBiomeBlending = 1
+				#
 				# How bright LOD colors are. 
 				# 
 				# 0 = black 
@@ -115,22 +119,6 @@ _version = 4
 				# 1 = normal 
 				# 2 = very saturated
 				saturationMultiplier = "1.0"
-				#
-				# This is the same as vanilla Biome Blending settings for Lod area. 
-				#     Note: anything above '0' will slow down LOD loading time. 
-				# 
-				#     '0' equals to Vanilla Biome Blending of '1x1' or 'OFF', 
-				#     '1' equals to Vanilla Biome Blending of '3x3', 
-				#     '2' equals to Vanilla Biome Blending of '5x5'...
-				lodBiomeBlending = 1
-				#
-				# If true DH will try to use the camera position when 
-				# determining LOD quality drop-off. 
-				# If false DH will use the player's position. 
-				#  
-				# Enabling helps free-cam mods render correctly. 
-				# Disabling helps multi-camera mods render correctly (ie Immersive Portals or camera mods).
-				useCameraPositionForQualityDropOff = true
 
 			[client.advanced.graphics.genericRendering]
 				#
@@ -144,7 +132,7 @@ _version = 4
 				# Sets the maximum height beacons will render up to. 
 				# 
 				# Requires a world re-load to take affect.
-				beaconRenderHeight = 6000
+				beaconRenderHeight = 3000
 				#
 				# If true LOD beacon beams will be rendered wider at extreme distances, 
 				# making them easier to see. 
@@ -154,16 +142,16 @@ _version = 4
 				# If true LOD clouds will be rendered.
 				enableCloudRendering = true
 				#
+				# False = DH will render a single layer of clouds, like vanilla Minecraft. 
+				# True = DH will render 3 layers of clouds at different heights.
+				enableMultiLayerClouds = true
+				#
 				# A comma separated separated list of dimension resource locations where DH clouds will render.
 				# 
 				# Example: "minecraft:overworld,minecraft:the_end"
 				# 
 				# Changes require a world re-load.
 				dimensionEnabledCloudRenderingCsv = "minecraft:overworld"
-				#
-				# False = DH will render a single layer of clouds, like vanilla Minecraft. 
-				# True = DH will render 3 layers of clouds at different heights.
-				enableMultiLayerClouds = false
 
 			[client.advanced.graphics.fog]
 				#
@@ -418,14 +406,6 @@ _version = 4
 				#  
 				# Options: 
 				# AUTO - changes based on the most likely API for that MC version 
-				# OPEN_GL - Default 
-				# BLAZE_3D - Only supported on MC 1.21.11
-				renderingApi = "AUTO"
-				#
-				# Requires a restart to change. 
-				#  
-				# Options: 
-				# AUTO - changes based on the most likely API for that MC version 
 				# OPEN_GL - The Default for MC 1.21.11 and older (supports Iris shaders) 
 				# BLAZE_3D - The Default for MC 26.1.2 and newer (supports Vulkan)
 				renderingEngine = "AUTO"
@@ -452,7 +432,7 @@ _version = 4
 			# If DH should use the nightly (provided by Gitlab), or stable (provided by Modrinth) build. 
 			# If [AUTO] is selected DH will update to new stable releases if the current jar is a stable jar 
 			# and will update to new nightly builds if the current jar is a nightly jar (IE the version number ends in '-dev').
-			updateBranch = "AUTO"
+			updateBranch = "NIGHTLY"
 
 		[client.advanced.debugging]
 			#
@@ -485,15 +465,15 @@ _version = 4
 			# If enabled the LODs will render as wireframe.
 			renderWireframe = false
 			#
+			# If true overlapping quads will be rendered as bright red for easy identification. 
+			# If false the quads will be rendered normally.
+			showOverlappingQuadErrors = false
+			#
 			# If true several keys can be used to toggle debug states. 
 			# F6 - enable/disable LOD rendering 
 			# F7 - enable/disable LOD only rendering 
 			# F8 - cycle through the different debug rendering modes
 			enableDebugKeybindings = false
-			#
-			# If true overlapping quads will be rendered as bright red for easy identification. 
-			# If false the quads will be rendered normally.
-			showOverlappingQuadErrors = false
 			#
 			# If true OpenGL Buffer garbage collection will be logged 
 			# this also includes the number of live buffers.
@@ -677,6 +657,7 @@ _version = 4
 		# Disabling this check may fix issues where LODs aren't updated after
 		# blocks have been changed.
 		disableUnchangedChunkCheck = false
+		dataCompression = "Z_STD_BLOCK"
 		#
 		# How should block data be compressed when creating LOD data? 
 		# This setting will only affect new or updated LOD data, 
@@ -693,7 +674,6 @@ _version = 4
 		# Hidden blocks (IE ores) are ignored.  
 		# Expected Compression Ratio: 0.7
 		worldCompression = "MERGE_SAME_BLOCKS"
-		dataCompression = "Z_STD_BLOCK"
 
 		[common.lodBuilding.experimental]
 			#
@@ -726,7 +706,7 @@ _version = 4
 		# 
 		# You probably don't need to change this unless you are also 
 		# running C2ME and are seeing thread starvation in either C2ME or DH.
-		threadPriority = 5
+		threadPriority = 3
 
 	[common.logging]
 		#
@@ -734,7 +714,7 @@ _version = 4
 		globalFileMaxLevel = "INFO"
 		#
 		# 
-		globalChatMaxLevel = "ERROR"
+		globalChatMaxLevel = "INFO"
 		#
 		# If enabled, the mod will log information about the world generation process. 
 		# This can be useful for debugging.
@@ -812,7 +792,7 @@ _version = 4
 	# DO NOT CHANGE UNLESS YOU KNOW WHAT YOU'RE DOING.
 	# Autogenerated ID used to prevent multiple independent servers from accidentally
 	# writing over each other's LODs when the same serverKey is set on both.
-	serverId = 653347336
+	serverId = 628382288
 	#
 	# Custom server key used which can be used to always reuse the same LOD data folder,
 	# for cases when the server doesn't have a static IP for some reason.

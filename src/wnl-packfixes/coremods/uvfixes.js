@@ -1823,6 +1823,136 @@ function initializeCoreMod() {
                 return classNode;
             }
         },
+        // Fix 47: Fusion x Blueprint join-stall NPE. On client login, Blueprint (Team Abnormals)
+        // bakes armor-trim item-model overrides (BlueprintTrims.modifyTrimmableItemModels ->
+        // ModelBakery.bake) -- a LATE phase, AFTER Fusion's static atlasStitchResults map has been
+        // cleared (it is only populated during the TextureAtlasStitchedEvent). Fusion's bake mixin then
+        // calls the STATIC FusionBlockModelData.containsFusionModelsOrTextures(BlockModel), which does
+        // `atlasStitchResults.get(...)` -> NullPointerException. NeoForge's EventBus catches it (no hard
+        // crash) but it aborts the trim baking and stalls the join ~40s (ModernFix watchdog fires) ->
+        // "world won't load". Guard: HEAD null-check on the static field -- when atlasStitchResults is
+        // null (the late-bake window), return false ("no fusion models/textures") instead of NPE, so the
+        // trim model bakes as a plain model and the join proceeds. During normal baking (right after the
+        // atlas stitch) the map is non-null -> IFNONNULL falls through to the original body, zero change.
+        // Pure no-op for the broken late call; correct behavior for every in-window bake.
+        'uvfixes_fusion_atlasstitch_null_guard': {
+            'target': { 'type': 'CLASS', 'name': 'com.supermartijn642.fusion.model.FusionBlockModelData' },
+            'transformer': function (classNode) {
+                var OWNER = 'com/supermartijn642/fusion/model/FusionBlockModelData';
+                var DESC = '(Lnet/minecraft/client/renderer/block/model/BlockModel;)Z';
+                var done = false;
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    if (!m.name.equals('containsFusionModelsOrTextures') || !m.desc.equals(DESC)) continue;
+                    if (m.instructions.size() === 0) break;
+                    var list = new InsnList();
+                    var cont = new LabelNode();
+                    list.add(new FieldInsnNode(Opcodes.GETSTATIC, OWNER, 'atlasStitchResults', 'Ljava/util/Map;'));
+                    list.add(new JumpInsnNode(Opcodes.IFNONNULL, cont)); // map populated -> run original body
+                    list.add(new InsnNode(Opcodes.ICONST_0));            // map null -> "no fusion data"
+                    list.add(new InsnNode(Opcodes.IRETURN));             //   return false (skip, no NPE)
+                    list.add(cont);
+                    m.instructions.insert(list);                          // prepend at method head
+                    if (m.maxStack < 1) m.maxStack = 1;
+                    done = true;
+                    break;
+                }
+                log(done ? 'Fusion containsFusionModelsOrTextures atlasStitchResults null-guard applied (late Blueprint trim bake on login no longer NPEs/stalls the world join)'
+                         : 'Fusion: containsFusionModelsOrTextures(BlockModel)Z not found, patch skipped (Fusion changed?)');
+                return classNode;
+            }
+        },
+        // Fix 48: DH 3.1.0-b worldgen deadlock with c2me. DH's INTERNAL_SERVER distant-generator
+        // (InternalServerGenerator.requestChunkFromServerAsync) force-generates each LOD chunk to
+        // ChunkStatus.FULL via ChunkHolder.scheduleChunkGenerationTask, and fires a whole batch of
+        // these concurrently with NO throttle on modern MC (the limiting semaphore is gated
+        // `#if MC_VER <= MC_1_12_2`). DH's own comment: "If C2ME is present the CPU will still be well
+        // utilized" -- it dumps the FULL-chunk flood onto c2me and trusts c2me to absorb it. c2me's
+        // 0.3.0-alpha.0.93 chunk scheduler can't, alongside player-chunk demand: a task is lost, the
+        // workers go idle, the server thread parks forever in getChunk -> hard worldgen deadlock
+        // (void terrain / "no chunks past spawn" / 40s->250s watchdog ticks). DH commit eb82ab14
+        // (2026-06-08, shipped in 3.1.0-b) introduced this by bumping the status FEATURES -> FULL;
+        // before that it generated to FEATURES and didn't deadlock. FEATURES already places
+        // structures (structure pieces are placed in the features step) and DH bakes its own LOD
+        // lighting, so reverting keeps distant structures + lighting -- zero graphics loss -- while
+        // each chunk is far lighter so the batch drains instead of flooding c2me. We swap ONLY the
+        // ChunkStatus.FULL that feeds a scheduleChunkGenerationTask/getOrScheduleFuture call (the
+        // gen-request path), so no unrelated FULL use is touched. Reverts eb82ab14 at class-load,
+        // no jar edit. Self-no-ops + logs if DH fixes it upstream or remaps.
+        'uvfixes_dh_internalserver_features_not_full': {
+            'target': { 'type': 'CLASS', 'name': 'com.seibel.distanthorizons.common.wrappers.worldGeneration.InternalServerGenerator_neoforge' },
+            'transformer': function (classNode) {
+                var CS = 'net/minecraft/world/level/chunk/status/ChunkStatus';
+                var CSDESC = 'Lnet/minecraft/world/level/chunk/status/ChunkStatus;';
+                var swapped = 0;
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    var insns = m.instructions.toArray();
+                    for (var j = 0; j < insns.length; j++) {
+                        var insn = insns[j];
+                        if (!(insn instanceof FieldInsnNode)) continue;
+                        if (insn.getOpcode() !== Opcodes.GETSTATIC) continue;
+                        if (!insn.owner.equals(CS) || !insn.name.equals('FULL') || !insn.desc.equals(CSDESC)) continue;
+                        // only swap when this FULL feeds a chunk-generation schedule call (the gen-request
+                        // path) -- never an unrelated ChunkStatus.FULL use.
+                        var feedsGen = false;
+                        for (var k = j + 1; k < insns.length && k < j + 15; k++) {
+                            var nx = insns[k];
+                            if (nx instanceof MethodInsnNode
+                                    && (nx.name.equals('scheduleChunkGenerationTask') || nx.name.equals('getOrScheduleFuture'))) {
+                                feedsGen = true; break;
+                            }
+                        }
+                        if (feedsGen) { insn.name = 'FEATURES'; swapped++; }
+                    }
+                }
+                log(swapped > 0
+                    ? 'DH InternalServerGenerator: reverted ChunkStatus.FULL -> FEATURES on the internal-server chunk request (x' + swapped + ') -- undoes DH eb82ab14; keeps distant structures, stops the FULL-chunk batch flooding/deadlocking c2me'
+                    : 'DH InternalServerGenerator: FULL gen-request not found, patch skipped (DH reverted eb82ab14 upstream, or class/mappings changed)');
+                return classNode;
+            }
+        },
+        // Fix 49 -- DH gen-ticket priority. Companion to Fix 48. DH adds its background gen
+        // ticket at chunk LEVEL 33 (== FULL) in BOTH the request (addTicket) and release
+        // (removeTicket) lambdas of InternalServerGenerator. Level 33 puts DH's distant chunks
+        // at the SAME priority as the player's own view-distance chunks, so on a fresh world
+        // DH's huge volume starves the player in the c2me queue ("spawn loads, nothing past it",
+        // server thread parks forever in ServerChunkCache.getChunk -> 40s..300s watchdog). It
+        // also forces FULL generation independently of Fix 48's schedule swap. Bumping BOTH
+        // ticket sites 33 -> 34: (a) deprioritises DH below every player chunk (all <= 33) so
+        // the player's chunks always win, DH backfills with spare worker capacity; (b) caps the
+        // chunk at INITIALIZE_LIGHT (one past FEATURES) -- keeps features + structures, drops
+        // only the FULL lighting/spawn finalise that DH bakes itself = zero graphics loss.
+        // add + remove are bumped together so the ticket is still removed (no leak).
+        'uvfixes_dh_internalserver_gen_ticket_level': {
+            'target': { 'type': 'CLASS', 'name': 'com.seibel.distanthorizons.common.wrappers.worldGeneration.InternalServerGenerator_neoforge' },
+            'transformer': function (classNode) {
+                var swapped = 0;
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    var insns = m.instructions.toArray();
+                    // only the two ticket lambdas -- methods that actually call add/removeTicket
+                    var ticketsHere = false;
+                    for (var t = 0; t < insns.length; t++) {
+                        var ti = insns[t];
+                        if (ti instanceof MethodInsnNode
+                                && (ti.name.equals('addTicket') || ti.name.equals('removeTicket'))) { ticketsHere = true; break; }
+                    }
+                    if (!ticketsHere) continue;
+                    for (var j = 0; j + 1 < insns.length; j++) {
+                        var insn = insns[j];
+                        if (insn.getOpcode() !== Opcodes.BIPUSH) continue;
+                        if (insn.operand !== 33) continue;                       // the level constant
+                        if (insns[j + 1].getOpcode() !== Opcodes.ISTORE) continue; // stored as the level local
+                        insn.operand = 34; swapped++;
+                    }
+                }
+                log(swapped > 0
+                    ? 'DH InternalServerGenerator: bumped gen-ticket level 33 -> 34 (x' + swapped + ') -- DH distant gen now yields to player chunks (no starvation) + caps at initialize_light (keeps features/structures)'
+                    : 'DH InternalServerGenerator: gen-ticket level-33 site not found, patch skipped (DH internals changed)');
+                return classNode;
+            }
+        },
     };
 }
 

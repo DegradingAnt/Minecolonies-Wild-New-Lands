@@ -2,6 +2,9 @@
   "logbegone": {
     "phrases": [
       "Disconnecting VANILLA connection attempt",
+      "[AnimationBridge] diagnostic",
+      "valarian_conquest:model",
+      "soundphysics$play",
       "Channels ",
       "mob category but was added under",
       "farmingforblockheads:market/",

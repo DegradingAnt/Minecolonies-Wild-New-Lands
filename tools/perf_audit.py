@@ -71,10 +71,11 @@ else:
 # --- modernfix .properties toggles (tracked: user wants these ON; updates can reset them) ---
 # expected active override -> value
 MODERNFIX_CHECKS = {
-    # MUST stay false: dynamic_resources prunes unbaked-model/sprite data, which breaks
-    # Domum Ornamentum's runtime-retextured blocks (wrong textures). DO is a hard
-    # MineColonies dependency -> correctness wins. RAM benefit was negligible here
-    # (63GB/24GB allocated; ferritecore still dedups). Disabled 2026-06-15. Do NOT re-enable.
+    # MUST stay false. Enabled it 2026-06-20 (the boot crash it was once blamed for was actually the
+    # sparsestructures.json5 missing-comma construct abort, NOT this) -- but with dynamic_resources ON,
+    # WORLD-JOIN broke: it defers resource/registry load past world-join, so EntityJoinLevelEvent hit
+    # "Cannot get config value before config is loaded" + the update_recipes packet failed to encode
+    # (enchantment id not yet in the synced map) -> player kicked to menu on EVERY world load. Reverted.
     "mixin.perf.dynamic_resources":   "false",
     "mixin.perf.deduplicate_location": "true",  # RL string interning (RAM) -- safe, keep ON
 }

@@ -3,7 +3,7 @@ loaderVersion="[4,)"
 license="MIT"
 [[mods]]
 modId="wnl_packfixes"
-version="1.31.0"
+version="1.36.0"
 displayName="WNL Pack Fixes (Custom Coremod)"
 authors="linde"
 description='''
