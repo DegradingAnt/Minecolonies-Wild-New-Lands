@@ -432,7 +432,7 @@ _version = 4
 			# If DH should use the nightly (provided by Gitlab), or stable (provided by Modrinth) build. 
 			# If [AUTO] is selected DH will update to new stable releases if the current jar is a stable jar 
 			# and will update to new nightly builds if the current jar is a nightly jar (IE the version number ends in '-dev').
-			updateBranch = "NIGHTLY"
+			updateBranch = "AUTO"
 
 		[client.advanced.debugging]
 			#
