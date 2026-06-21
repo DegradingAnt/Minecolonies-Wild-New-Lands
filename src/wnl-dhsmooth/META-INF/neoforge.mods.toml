@@ -7,9 +7,7 @@ modId = "wnl_dhsmooth"
 version = "1.1.0"
 displayName = "WNL DH LOD Smoothing"
 authors = "DegradingAnt"
-description = '''Experimental client-side fix for Distant Horizons periodic frame-spike freezes.
-DH uploads LOD render buffers asynchronously; when a batch finishes, the next frame's near->far draw list jumps and that single frame draws all the new geometry at once -> on a GPU already saturated by DH-through-shaders, that one heavy frame is felt as a multi-hundred-ms hitch.
-This caps how many NEWLY-appeared buffers join the draw list per frame (RenderBufferHandler.buildRenderList TAIL), so a finished batch fades in over a few frames instead of one. Already-visible terrain is never deferred (no flicker); deferred buffers are re-offered each following frame, so distant LODs just appear a few frames later (imperceptible at LOD range). Quality-neutral: identical pixels once ramped, no graphics setting changed. Tunable/disable via config/wnl_dhsmooth.properties. Client-only; self-no-ops if DH internals move. Delete this jar to remove. Addon to WNL-PackFixes.'''
+description = '''A client-side fix for the periodic frame-spike freezes Distant Horizons can cause. DH uploads its LOD render buffers in the background, and when a batch finishes, the very next frame has to draw all that new geometry at once. On a GPU already busy pushing DH through shaders, that single frame lands as a multi-hundred-millisecond hitch. This caps how many newly-finished buffers get added to the draw list each frame (in RenderBufferHandler.buildRenderList), so a batch fades in over a few frames instead of all at once. Terrain that's already on screen is never held back, and deferred buffers are retried every following frame, so distant LODs just appear a frame or two later, which you won't notice at that range. Same final image, no graphics settings changed. Configure or disable it in config/wnl_dhsmooth.properties. Client-only, and it quietly does nothing if DH's internals move. Delete the jar to remove it. Add-on to WNL PackFixes.'''
 
 [[mixins]]
 config = "wnl_dhsmooth.mixins.json"

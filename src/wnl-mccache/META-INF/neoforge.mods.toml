@@ -7,9 +7,11 @@ modId = "wnl_mccache"
 version = "1.1.0"
 displayName = "WNL MineColonies Discovery Cache"
 authors = "DegradingAnt"
-description = '''Caches MineColonies' CompatibilityManager.discoverAllItems creative-tab scan to disk (local/wnl_mccache/discovery.nbt), saving ~5-6s off the Server thread on every world join after the first. Auto-rebuilds when the mod set or relevant datapack registries change.
-1.1.0: also fixes the recurring client crash IllegalStateException "World mismatch" (structurize Blueprint.setRotationMirrorRelative, via MineColonies' build-preview renderer on the render thread). ColonyBlueprintRenderer.blueprintDataCache is keyed only on pack/path/orientation with no level/registry identity and is NOT cleared on disconnect (unlike its 3 sibling client caches in ClientEventHandler.onPlayerLogout), so after a reconnect a cache HIT returns a Blueprint bound to the dead level's registryAccess -> "World mismatch". A client @Inject(TAIL) on onPlayerLogout flushes the preview cache (invalidateAll + invalidateCache); the next reconnect rebuilds previews against the live level. Self-healing, client-only, cannot affect legitimate building.
-Delete this jar to remove both features. Addon to WNL-PackFixes.'''
+description = '''Caches MineColonies' CompatibilityManager.discoverAllItems creative-tab scan to disk (local/wnl_mccache/discovery.nbt), saving about 5-6 seconds off the Server thread on every world join after the first. It rebuilds automatically when the mod set or the relevant datapack registries change.
+
+Version 1.1.0 also fixes the recurring client crash, an IllegalStateException "World mismatch" thrown from structurize's Blueprint.setRotationMirrorRelative by MineColonies' build-preview renderer on the render thread. ColonyBlueprintRenderer.blueprintDataCache is keyed only on pack, path, and orientation, with no level or registry identity, and it isn't cleared on disconnect like its three sibling client caches in ClientEventHandler.onPlayerLogout. So after a reconnect, a cache hit can return a Blueprint still bound to the dead level's registryAccess, which throws "World mismatch". A client @Inject(TAIL) on onPlayerLogout flushes the preview cache, and the next reconnect rebuilds previews against the live level. It is client-only and can't affect actual building.
+
+Delete the jar to remove both features. Add-on to WNL PackFixes.'''
 
 [[mixins]]
 config = "wnl_mccache.mixins.json"

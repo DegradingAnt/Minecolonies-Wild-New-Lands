@@ -7,7 +7,7 @@ modId = "wnl_archersattr"
 version = "1.0.0"
 displayName = "WNL Archers Expansion Attribute Fix"
 authors = "DegradingAnt"
-description = '''Registers the EntityAttributeCreationEvent attributes that archers_expansion forgot to wire on NeoForge, for its summon entities alter_ego and spell_polar_bear (otherwise the server crashes with "Can't find attribute supplier" the moment the summon spell resolves). Reuses the mod's own builder methods via reflection (no hard dependency); no-ops if archers_expansion is absent. Delete this jar to remove the fix. Addon to WNL-PackFixes.'''
+description = '''Registers the EntityAttributeCreationEvent attributes that archers_expansion forgot to wire up on NeoForge for its two summon entities, alter_ego and spell_polar_bear. Without them the server crashes with "Can't find attribute supplier" the moment the summon spell resolves. It reuses the mod's own builder methods through reflection, so there's no hard dependency, and it does nothing if archers_expansion isn't installed. Delete the jar to remove the fix. Add-on to WNL PackFixes.'''
 
 [[dependencies."wnl_archersattr"]]
 modId = "neoforge"

@@ -7,11 +7,11 @@ modId = "wnl_colonyborder"
 version = "1.0.0"
 displayName = "WNL Colony Border Patrols"
 authors = "DegradingAnt"
-description = '''Relocates patrol/raid mobs that would spawn INSIDE a MineColonies colony (in buildings / within the claimed perimeter) to the nearest claimed-edge instead, so they approach from the border rather than materialising in the middle of your base.
+description = '''Moves patrol and raid mobs that would spawn inside a MineColonies colony (in your buildings, or anywhere within the claimed perimeter) out to the nearest claimed edge, so they approach from the border instead of appearing in the middle of your base.
 
-Catches vanilla + illager-family patrols automatically (anything extending PatrollingMonster), plus a configurable list of mod namespaces (default: illagerinvasion, raided, takesapillage, born_in_chaos_v1, valarian_conquest, knightquest — HOSTILE mobs only). MineColonies' own raiders are left untouched.
+It catches vanilla and illager-family patrols automatically (anything that extends PatrollingMonster), plus a configurable list of mod namespaces (by default illagerinvasion, raided, takesapillage, born_in_chaos_v1, valarian_conquest, and knightquest, hostile mobs only). MineColonies' own raiders are left alone.
 
-Server-side, event-driven (FinalizeSpawnEvent) — no jar edits, no mixins. Configure or disable via config/wnl_colonyborder.properties. Delete this jar to remove. Addon to WNL-PackFixes.'''
+Server-side and event-driven (FinalizeSpawnEvent), with no jar edits or mixins. Configure or disable it in config/wnl_colonyborder.properties. Delete the jar to remove it. Add-on to WNL PackFixes.'''
 
 [[dependencies."wnl_colonyborder"]]
 modId = "neoforge"
