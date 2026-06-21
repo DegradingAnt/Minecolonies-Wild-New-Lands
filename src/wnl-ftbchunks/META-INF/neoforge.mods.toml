@@ -6,7 +6,7 @@ license = "MIT"
 modId = "wnl_ftbchunks"
 version = "1.0.0"
 displayName = "WNL FTB Chunks Map-Save Offload"
-authors = "WNL"
+authors = "DegradingAnt"
 description = '''Moves FTB Chunks' MapRegionData.write() snapshot (5x 512x512 BufferedImage alloc + ~1.3M setRGB) off the render thread onto FTB Chunks' own MAP_EXECUTOR background thread, removing the periodic 60s-autosave / pause-screen render-thread spikes. Delete this jar to remove the feature. Addon to WNL-PackFixes.'''
 
 [[mixins]]

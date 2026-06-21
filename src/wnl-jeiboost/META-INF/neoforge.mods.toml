@@ -6,7 +6,7 @@ license = "MIT"
 modId = "wnl_jeiboost"
 version = "1.2.1"
 displayName = "WNL JEIBoost"
-authors = "WNL"
+authors = "DegradingAnt"
 description = '''Parallel JEI plugin registration + join-time caches for the WNL pack. Addon to WNL-PackFixes — delete this jar to remove the feature. Parallel recipe/filter phases (pinned plugins and failures run on the main thread) plus a disk cache of the creative-tab ingredient scan that saves ~10s per world join after the first.'''
 
 [[mixins]]

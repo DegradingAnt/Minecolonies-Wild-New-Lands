@@ -5,7 +5,7 @@ license="MIT"
 modId="wnl_packfixes"
 version="1.37.0"
 displayName="WNL Pack Fixes (Custom Coremod)"
-authors="linde"
+authors="DegradingAnt"
 description='''
 Runtime bytecode fixes for this pack, applied at class-load time so original mod jars stay untouched:
 - Quark 4.1-480: tiny potato null-model guard (crash with Continuity + broken resource pack model)

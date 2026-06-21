@@ -6,7 +6,7 @@ license = "MIT"
 modId = "wnl_colonyborder"
 version = "1.0.0"
 displayName = "WNL Colony Border Patrols"
-authors = "WNL"
+authors = "DegradingAnt"
 description = '''Relocates patrol/raid mobs that would spawn INSIDE a MineColonies colony (in buildings / within the claimed perimeter) to the nearest claimed-edge instead, so they approach from the border rather than materialising in the middle of your base.
 
 Catches vanilla + illager-family patrols automatically (anything extending PatrollingMonster), plus a configurable list of mod namespaces (default: illagerinvasion, raided, takesapillage, born_in_chaos_v1, valarian_conquest, knightquest — HOSTILE mobs only). MineColonies' own raiders are left untouched.
