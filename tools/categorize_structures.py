@@ -240,13 +240,15 @@ def main():
                 members = [s.get("structure","") for s in data.get("structures",[]) if isinstance(s,dict)]
                 sets[sid] = {"jar": jar, "placement": pl, "members": members}
 
-    # CristelLib owns its managed sets; Structurify owns the rest. Global modifier OFF so every
-    # set is tuned by exactly ONE system at an explicit absolute value (no double-application).
-    cris_index, cris_parsed = load_cristellib(set(sets.keys()))
-    cris_dirty = set()                 # files we modified
+    # B (one system): STRUCTURIFY is the SOLE control plane. Every tuned set becomes an explicit
+    # Structurify override; CristelLib configs are RESTORED to pristine on --apply. Structurify runs
+    # downstream of CristelLib (post-load mixin, EventPriority.LOWEST) and overrides all placement at
+    # read-time, so it always wins — one control file, zero double-tuning. cris_index is kept only to
+    # report which sets were previously CristelLib-co-opted.
+    cris_index, _ = load_cristellib(set(sets.keys()))
     tiers = collections.Counter()
-    overrides = []                     # Structurify-owned explicit entries
-    skipped_rings = skipped_nosp = cris_count = 0
+    overrides = []                     # ALL tuned sets -> Structurify explicit entries
+    skipped_rings = skipped_nosp = 0
     review = []
     rows = []           # numeric per-tuned-set data for the effective-multiplier matrix
     for sid, info in sorted(sets.items()):
@@ -265,34 +267,29 @@ def main():
         nsp = scale(sp, mult, 2, cap)
         nse = scale(se, mult if se else 1, 1, cap) if se is not None else se
         if nse is not None and nsp is not None and nse >= nsp: nse = nsp - 1   # spacing > separation
-        owner = "cristellib" if sid in cris_index else "structurify"
+        prior = "cristellib" if sid in cris_index else "structurify"   # informational: prior owner
         try: van_sp = int(sp)
         except Exception: van_sp = None
         rows.append({"set": sid, "tier": tier, "loot": loot, "van_sp": van_sp,
-                     "new_sp": nsp, "mult": mult, "owner": owner})
-        if owner == "cristellib":
-            f, key = cris_index[sid]; e = cris_parsed[f].setdefault(key, {})
-            e["spacing"] = nsp
-            if nse is not None: e["separation"] = nse
-            if "salt" not in e and "salt" in pl: e["salt"] = pl["salt"]
-            cris_dirty.add(f); cris_count += 1
-        else:
-            entry = {"name": sid, "is_disabled": False, "spacing": nsp,
-                     "separation": nse if nse is not None else se,
-                     "override_global_spacing_and_separation_modifier": True}
-            if "salt" in pl: entry["salt"] = pl["salt"]
-            if "frequency" in pl: entry["frequency"] = pl["frequency"]
-            overrides.append(entry)
+                     "new_sp": nsp, "mult": mult, "owner": prior})
+        # SOLE control plane: every tuned set is an explicit Structurify override
+        entry = {"name": sid, "is_disabled": False, "spacing": nsp,
+                 "separation": nse if nse is not None else se,
+                 "override_global_spacing_and_separation_modifier": True}
+        if "salt" in pl: entry["salt"] = pl["salt"]
+        if "frequency" in pl: entry["frequency"] = pl["frequency"]
+        overrides.append(entry)
         review.append((sid, tier, f"sp{sp}/se{se}", f"x{mult}",
-                       f"sp{nsp}/se{nse if nse is not None else se}", owner, loot))
+                       f"sp{nsp}/se{nse if nse is not None else se}", prior, loot))
 
     # ---- report ----
     print(f"=== {len(sets)} structure_sets classified ===")
     for t in ("LOOT","DEFAULT","TOWN","BIG","MASSIVE","FLOAT","DECO","RUIN","RUINED_DECO"):
         print(f"  {t:11} {tiers[t]:4}")
     print(f"  concentric_rings skipped: {skipped_rings}   no-spacing skipped: {skipped_nosp}")
-    print(f"  OWNERSHIP -> CristelLib: {cris_count} sets in {len(cris_dirty)} files | "
-          f"Structurify: {len(overrides)} explicit entries")
+    n_prior_cris = sum(1 for r in rows if r["owner"] == "cristellib")
+    print(f"  STRUCTURIFY (sole control): {len(overrides)} explicit entries "
+          f"({n_prior_cris} were CristelLib-co-opted, now moved to Structurify)")
     print()
     print("=== sample per tier (id | tier | vanilla | mult | new | owner) ===")
     shown = collections.Counter()
@@ -331,7 +328,7 @@ def main():
     plan = {"general": {"prevent_structure_overlap": PREVENT_OVERLAP,
                         "enable_global_spacing_and_separation_modifier": False},
             "tier_counts": dict(tiers),
-            "ownership": {"cristellib": cris_count, "structurify": len(overrides)},
+            "ownership": {"mode": "structurify-sole", "structurify": len(overrides)},
             "overrides": overrides,
             "review": [{"set":r[0],"tier":r[1],"vanilla":r[2],"mult":r[3],"new":r[4],
                         "owner":r[5],"loot":r[6]} for r in review]}
@@ -340,7 +337,7 @@ def main():
 
     if apply:
         import shutil
-        # 1) Structurify: own the non-CristelLib sets, global modifier OFF
+        # 1) Structurify: own ALL sets (sole control plane), global modifier OFF
         cur = json.load(open(CFG)) if os.path.exists(CFG) else {}
         cur.setdefault("general", {})
         cur["general"]["prevent_structure_overlap"] = PREVENT_OVERLAP
@@ -350,13 +347,14 @@ def main():
         json.dump(cur, open(CFG, "w"), indent=2)
         print(f"APPLIED Structurify -> {os.path.relpath(CFG, ROOT)} "
               f"({len(overrides)} entries, global modifier OFF)")
-        # 2) CristelLib: write tuned values into its managed placement configs (backup each once)
-        for f in sorted(cris_dirty):
+        # 2) CristelLib: RESTORE every managed config to pristine from its backup, so Structurify is
+        # the SOLE tuner (CristelLib only creates the sets in the registry; Structurify overrides all
+        # placement at read-time, downstream). Files never modified have no backup + are already pristine.
+        restored = 0
+        for f in glob.glob(os.path.join(CRIS, "*", "structure_placement_config.json5")):
             bak = f + ".prestructurify.bak"
-            if not os.path.exists(bak): shutil.copy(f, bak)
-            json5_write(f, cris_parsed[f])
-        print(f"APPLIED CristelLib -> {len(cris_dirty)} placement configs "
-              f"(backups: *.prestructurify.bak)")
+            if os.path.exists(bak): shutil.copy(bak, f); restored += 1
+        print(f"RESTORED CristelLib -> {restored} configs to pristine (Structurify is sole tuner)")
     else:
         print("(dry-run; re-run with --apply to write configs)")
 

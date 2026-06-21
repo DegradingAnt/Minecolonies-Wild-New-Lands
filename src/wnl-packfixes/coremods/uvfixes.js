@@ -262,6 +262,63 @@ function initializeCoreMod() {
                 return classNode;
             }
         },
+        // Fix 50: Fusion 1.3.1 x Continuity 3.0.0 SpriteLoader stitch-order collision (nature-block
+        // atlas renders the WRONG texture region with a Fusion-format Better-Grass pack present).
+        // Both @Mixin(SpriteLoader). Fusion's SpriteLoaderMixin is priority=900 (it deliberately runs
+        // OUTSIDE other sprite mixins): @Inject getStitchedSprites RETURN -> afterLoadSprites() does
+        // map.remove(dummy)+map.put(realSprite), baking the connected-texture atlas regions. Continuity's
+        // SpriteLoaderMixin is DEFAULT priority=1000 (higher applies FIRST) with @ModifyArg on
+        // loadAndStitch + @Inject stitch RETURN. At 1000 Continuity wraps INSIDE Fusion's 900, inverting
+        // the order Fusion's 900 was written for -> grass/dirt/path/farmland/podzol/mycelium resolve to
+        // the wrong stitched region. Silent (no parse error; matches the clean log). Fix: lower Continuity
+        // SpriteLoaderMixin priority 1000 -> 800 (below Fusion 900) so Fusion's map-rewrite is authoritative
+        // and Continuity reads the corrected map for emissives after. Class-annotation only; no method
+        // bytecode touched; emissive CTM still works. Keeps Fusion 1.3.1 + Continuity + the pack.
+        'uvfixes_continuity_spriteloader_priority': {
+            'target': { 'type': 'CLASS', 'name': 'me.pepperbell.continuity.client.mixin.SpriteLoaderMixin' },
+            'transformer': function (classNode) {
+                var MIXIN_DESC = 'Lorg/spongepowered/asm/mixin/Mixin;';
+                var done = false;
+                var anns = classNode.invisibleAnnotations; // @Mixin is RuntimeInvisible (CLASS retention)
+                if (anns != null) {
+                    for (var i = 0; i < anns.size(); i++) {
+                        var a = anns.get(i);
+                        if (!a.desc.equals(MIXIN_DESC)) continue;
+                        // Rebuild the values list FRESH (flat [key,value,...]): copy every existing
+                        // pair except any 'priority', then append a clean ['priority', 800]. This is
+                        // atomic + always even-length (a half-mutated/odd list corrupts AnnotationNode.
+                        // accept -> "Index N out of bounds"). Integer.valueOf, not new Integer(...),
+                        // which Nashorn can mishandle.
+                        var nv = new java.util.ArrayList();
+                        if (a.values != null) {
+                            for (var j = 0; j + 1 < a.values.size(); j += 2) {
+                                if (!a.values.get(j).equals('priority')) {
+                                    nv.add(a.values.get(j));
+                                    nv.add(a.values.get(j + 1));
+                                }
+                            }
+                        }
+                        nv.add('priority');
+                        // The coremod Nashorn sandbox (CoreModScriptingEngine.checkClass) whitelists
+                        // ONLY java.util / java.util.function / org.objectweb.asm.* -- ALL of java.lang
+                        // is blocked, so EVERY route to java.lang.Integer fails:
+                        //   new java.lang.Integer(800)         -> bare path = JavaPackage, not a class
+                        //   java.lang.Integer.valueOf(800)     -> same JavaPackage
+                        //   Java.type('java.lang.Integer')...  -> ClassNotFoundException (filtered)
+                        // BUT a bare JS int literal added to a List<Object> is auto-boxed by Nashorn
+                        // (15.4) to java.lang.Integer -- never Double -- which is exactly what ASM's
+                        // AnnotationNode wants for an int element. Verified empirically (BoxTest).
+                        nv.add(800);
+                        a.values = nv;
+                        done = true;
+                        break;
+                    }
+                }
+                log(done ? 'continuity SpriteLoaderMixin priority -> 800 (below Fusion 900; fixes nature-block atlas region swap)'
+                         : 'continuity SpriteLoaderMixin: @Mixin annotation not found, patch skipped (mod updated?)');
+                return classNode;
+            }
+        },
         // Fix 27 (see comment above uvStripInjectors): neuter the 3 broken
         // createaeronauticscurios 2.0 LinkedTypewriter mixins so the pack boots.
         'uvfixes_aerocurios_typewriter_be': {

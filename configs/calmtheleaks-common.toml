@@ -15,11 +15,11 @@ trend_window_minutes = 15
 # Range: > 0
 escalation_chunk_threshold = 512
 #Whether to log detailed debug information (default: false)
-log_debug_details = false
+log_debug_details = true
 #Whether to automatically trigger Spark profiling when leaks are detected (default: true). Set to false to disable automatic Spark profiling and avoid chat messages.
 auto_spark_profiling = false
 #When true, parsed AllTheLeaks leak lines are not printed to log/chat; use /ctl panel instead (default: true).
-suppress_atl_leak_lines = true
+suppress_atl_leak_lines = false
 #When true, /ctl status|leaks|explain opens the diagnostics GUI for players instead of chat (default: true).
 prefer_diagnostics_gui = true
 #When opening the CTL panel from a command, send a short chat acknowledgement (default: false).

@@ -3,7 +3,7 @@ import json, os
 
 INSTALL = r"C:\Users\linde\curseforge\minecraft\Install"
 INSTANCE = r"C:\Users\linde\curseforge\minecraft\Instances\Ultimate vibes distant horizons version"
-VERSION = "neoforge-21.1.233"
+VERSION = "neoforge-21.1.234"
 LIBDIR = os.path.join(INSTALL, "libraries")
 NATIVES = os.path.join(INSTALL, "natives", VERSION)
 

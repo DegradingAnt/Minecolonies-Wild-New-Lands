@@ -95,7 +95,13 @@
       "uses outdated modproperties format",
       "could not be found.",
       "specified in data map for registry",
-      "fruitsdelight:emptying"
+      "fruitsdelight:emptying",
+      "Ignoring unknown attribute",
+      "Missing trade item listings for",
+      "Flywheel backend fell back",
+      "declared support for versions",
+      "Font is not in TTF format",
+      "could not find sampler named Sampler2"
     ],
     "regex": [
       "Disconnecting VANILLA connection attempt",
