@@ -6,7 +6,7 @@
 > a good time, but please treat it as a work in progress rather than a finished pack. If
 > something seems broken, that's probably why.
 
-Hi, I'm DegradingAnt. Wild New Lands started as me trying to build the Minecraft pack I actually
+Hi all! I'm DegradingAnt. Wild New Lands started as me trying to build the Minecraft pack I actually
 wanted to play, and it's grown into a bit of an obsession. It's a Minecolonies pack on NeoForge
 1.21.1, built around Distant Horizons so the world feels genuinely big and worth wandering through.
 What I'm going for is a huge, living world that still runs smoothly and feels like one cohesive
