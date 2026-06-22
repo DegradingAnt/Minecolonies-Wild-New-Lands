@@ -111,8 +111,61 @@ function uvStripInjectors(classNode, label) {
     return classNode;
 }
 
+// Fix 54: MineColonies_Tweaks 3.30 (May) + MineColonies_Compatibility 3.51 (May) were built
+// against an OLDER minecolonies; today's 1.1.1332 snapshot refactored internals, so ~20 of their
+// @Inject/@Redirect/@WrapOperation/@Modify* injectors no longer resolve (out-of-range @At ordinal,
+// moved/removed call sites). Each defaults to require=1, so the first one mixin tries to apply
+// throws a Critical InjectionError -> the DEDICATED SERVER reaches "Done" then crashes on the first
+// tick (DataPackSyncEventHandler -> CompatibilityManager.discoverFood -> FoodUtils) -> DatHost
+// boot-loops it. FIX: set require=0 + expect=0 on EVERY injector in every minecolonies-targeting
+// mixin of both addons. `require` is a FLOOR, never a ceiling: a still-resolving injector applies
+// exactly as before; only a genuinely-unresolvable one no-ops (graceful degradation) instead of
+// aborting the load. No jar edit. Self-heals once the addons ship 1.1.1332-matched builds (their
+// injectors resolve again and apply normally). Accessors/Invokers verified intact (offline scan),
+// so there is no require-less break mode left unhandled.
+var UV_INJECTOR_ANNS = [
+    'Lorg/spongepowered/asm/mixin/injection/Inject;',
+    'Lorg/spongepowered/asm/mixin/injection/Redirect;',
+    'Lorg/spongepowered/asm/mixin/injection/ModifyArg;',
+    'Lorg/spongepowered/asm/mixin/injection/ModifyArgs;',
+    'Lorg/spongepowered/asm/mixin/injection/ModifyConstant;',
+    'Lorg/spongepowered/asm/mixin/injection/ModifyVariable;'
+];
+function uvIsInjectorAnn(desc) {
+    if (desc.startsWith('Lcom/llamalad7/mixinextras/injector/')) return true; // @WrapOperation/@ModifyExpressionValue/@WrapWithCondition/...
+    for (var x = 0; x < UV_INJECTOR_ANNS.length; x++) if (desc.equals(UV_INJECTOR_ANNS[x])) return true;
+    return false;
+}
+// Set an int element on an annotation node. A bare JS number added to a java.util.List is
+// auto-boxed by Nashorn to java.lang.Integer (the sandbox blocks java.lang.* directly; see the
+// coremod-nashorn-sandbox note) -- which is exactly the type Mixin's annotation reader expects.
+function uvSetAnnInt(an, key, val) {
+    if (an.values == null) an.values = new java.util.ArrayList();
+    for (var i = 0; i < an.values.size(); i += 2) {
+        if (an.values.get(i).equals(key)) { an.values.set(i + 1, val); return; }
+    }
+    an.values.add(key);
+    an.values.add(val);
+}
+function uvOptionalizeInjectors(classNode, label) {
+    var n = 0;
+    for (var i = 0; i < classNode.methods.size(); i++) {
+        var anns = classNode.methods.get(i).visibleAnnotations;
+        if (anns == null) continue;
+        for (var k = 0; k < anns.size(); k++) {
+            if (uvIsInjectorAnn(anns.get(k).desc)) {
+                uvSetAnnInt(anns.get(k), 'require', 0);
+                uvSetAnnInt(anns.get(k), 'expect', 0);
+                n++;
+            }
+        }
+    }
+    log('mc-addon ' + label + ': ' + n + ' injector(s) made optional (require=0) vs minecolonies 1.1.1332 drift');
+    return classNode;
+}
+
 function initializeCoreMod() {
-    return {
+    var UVMAP = {
         // Fix 30: Domum Ornamentum architect's-cutter item ICONS render blank/wrong when DO's
         // MateriallyTexturedBakedModel is wrapped by a Fabric ForwardingBakedModel that reports
         // isVanillaAdapter()=false (Continuity emissive/CTM EmissiveBakedModel/CtmBakedModel,
@@ -630,6 +683,43 @@ function initializeCoreMod() {
                     }
                 }
                 log(done ? 'spawn field-guide reflection guard applied' : 'spawn: target method missing, patch skipped (mod updated?)');
+                return classNode;
+            }
+        },
+        // Fix 53: minecolonies 1.1.1332 ItemFood (the base class of every minecolonies food item)
+        // has an un-dist-guarded CLIENT reference -- getTooltipImage() calls
+        // Minecraft.getInstance().level (a ClientLevel) for a tooltip preview. ItemFood is loaded
+        // for the first time when ModItemsInitializer.init constructs ItemMilkyBread; on a DEDICATED
+        // SERVER, verifying ItemFood forces ClientLevel to load -> RuntimeDistCleaner throws
+        // "Attempted to load class ClientLevel for invalid dist DEDICATED_SERVER" -> minecolonies'
+        // item RegisterEvent aborts mid-registration -> the item registry never finalises -> EVERY
+        // item DeferredHolder stays unbound -> knightlib/simulated/spawn/aeronautics/paladins all
+        // cascade "unbound value"/null-item -> total server boot crash. THIS is the true root; the
+        // other "unbound" failures were victims. Neutralise getTooltipImage to return
+        // Optional.empty() (removes the only Minecraft/ClientLevel reference in the class). Drops a
+        // minor client tooltip-preview image; nothing functional, and the server boots.
+        'uvfixes_minecolonies_itemfood_clientlevel': {
+            'target': { 'type': 'CLASS', 'name': 'com.minecolonies.core.items.ItemFood' },
+            'transformer': function (classNode) {
+                var done = false;
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    if (!m.name.equals('getTooltipImage') || !m.desc.equals('(Lnet/minecraft/world/item/ItemStack;)Ljava/util/Optional;')) continue;
+                    m.instructions.clear();
+                    if (m.tryCatchBlocks != null) m.tryCatchBlocks.clear();
+                    if (m.localVariables != null) m.localVariables.clear();
+                    m.visibleLocalVariableAnnotations = null;
+                    m.invisibleLocalVariableAnnotations = null;
+                    var il = new InsnList();
+                    il.add(new MethodInsnNode(Opcodes.INVOKESTATIC, 'java/util/Optional', 'empty', '()Ljava/util/Optional;', false));
+                    il.add(new InsnNode(Opcodes.ARETURN));
+                    m.instructions.add(il);
+                    m.maxStack = 1; m.maxLocals = 2;
+                    done = true;
+                    break;
+                }
+                log(done ? 'minecolonies ItemFood.getTooltipImage neutralised -> Optional.empty (removes the ClientLevel ref that aborted dedicated-server item registration; THE root fix)'
+                         : 'minecolonies: ItemFood.getTooltipImage not matched (mod updated? check whether the ClientLevel leak moved)');
                 return classNode;
             }
         },
@@ -2011,6 +2101,136 @@ function initializeCoreMod() {
             }
         },
     };
+
+    // Fix 54 (cont.): register the require=0 graceful-degradation transformer for every
+    // minecolonies-targeting mixin in MineColonies_Tweaks 3.30 + MineColonies_Compatibility 3.51.
+    // Listed exhaustively (enumerated from both mods' mixin configs by ScanTweaks.java) so a snapshot
+    // break in ANY of them no-ops instead of boot-looping the server -- not just the ~20 currently
+    // confirmed broken. Optionalising an already-resolving injector is a no-op (require is a floor).
+    var UV_MC_ADDON_MIXINS = [
+        // MineColonies_Compatibility 3.51 (35)
+        'steve_gall.minecolonies_compatibility.mixin.client.minecolonies.AbstractModuleWindowAccessor',
+        'steve_gall.minecolonies_compatibility.mixin.client.minecolonies.SettingsModuleViewMixin',
+        'steve_gall.minecolonies_compatibility.mixin.client.minecolonies.SettingsModuleWindow1Mixin',
+        'steve_gall.minecolonies_compatibility.mixin.client.minecolonies.WindowCraftingMixin',
+        'steve_gall.minecolonies_compatibility.mixin.client.minecolonies.WindowListRecipes1Mixin',
+        'steve_gall.minecolonies_compatibility.mixin.client.minecolonies.WindowListRecipesAcccessor',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.AbstractBuildingGuardsMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.AbstractEntityAIBasicMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.AbstractEntityAICraftingAccessor',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.AbstractEntityAICraftingMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.AbstractEntityAIFightMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.AbstractEntityAIHerderMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.AbstractWarehouseRequestResolverMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.AnimalHerdingModuleMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.AttackMoveAIMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.BuildingEntryMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.CompatibilityManagerMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.ContainerCraftingMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.EntityAIArcherTrainingMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.EntityAICombatTrainingMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.EntityAIKnightMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.EntityAIRangerMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.EntityAIWorkBlacksmithMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.EntityAIWorkDeliverymanMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.EntityAIWorkFarmerMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.EquipmentTypeEntryMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.GenericRecipeCategoryMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.ItemStackUtilsMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.KnightCombatAIMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.PrivateCraftingTeachingTransferHandlerMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.PrivateWorkerCraftingRequestResolverMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.RangerCombatAIMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.RecipeStorageMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.TileEntityWareHouseMixin',
+        'steve_gall.minecolonies_compatibility.mixin.common.minecolonies.TinkersToolHelperMixin',
+        // MineColonies_Tweaks 3.30 (74)
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.AbstractBuildingMainWindowMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.AbstractWindowSkeletonMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.AbstractWindowSkeletonsMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.ColonyBlueprintRendererBuildGogglesMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.ItemListModuleWindowMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.MainWindowCitizenMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.RestaurantMenuModuleWindow1Mixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.RestaurantMenuModuleWindow2Mixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.RestaurantMenuModuleWindowMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.TabsWindowModuleMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.TileEntityScarecrowRendererMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.ToolRecipeCategoryMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.TownhallWindowMainPageMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.WindowCraftingsMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.WindowFieldMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.WindowHutAllInventoryMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.WindowInventoriesMixin',
+        'steve_gall.minecolonies_tweaks.mixin.client.minecolonies.WindowResearchTreeMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.AbstractBuildingMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.AbstractEntityAICraftingAccessor',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.AbstractEntityAICraftingMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.AbstractEntityAIInteractMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.AbstractEntityAIStructureAccessor',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.AbstractEntityAIStructureMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.AbstractEntityMinecoloniesRaiderMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.AbstractTileEntityRackMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.BuildingDyerCraftingModuleMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.BuildingExtensionsModuleMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.BuildingStructureHandlerMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.CitizenDataMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.CitizenDiseaseHandlerAccessor',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.CitizenFoodHandlerMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.CitizenMournHandlerMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ColonyMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.CompatibilityManagerMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.CourierAssignmentModuleMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.CourierAssignmentModuleViewMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.CreativeBuildingStructureHandlerMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.EntityAIStructureBuilderAccessor',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.EntityAIStudyMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.EntityAIWorkCookMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.EntityAIWorkFarmerAccessor',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.EntityAIWorkFarmerMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.EntityAIWorkLumberjackMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.EntityAIWorkSifterAccessor',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.EntityAIWorkSifterMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.EntityAIWorkUndertakerMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.EntityCitizenMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.EquipmentTypeEntryMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.FoodUtilsMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.GlobalResearchBranchMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.GlobalResearchEffectMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ItemClipboardAccessor',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ItemColonyMapAccessor',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ItemCropMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ItemListModuleViewAccessor',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ItemQuestLogAccessor',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ItemResourceScrollAccessor',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ItemStackUtilsMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.LoadOnlyStructureHandlerMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.LocalResearchTreeMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.MinecoloniesCropBlockMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.PostBoxRequestMessageMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.RecipeStorageMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.RegisteredStructureManagerViewMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ResearchEffectCategoryMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ResearchEffectManagerMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ResearchListenerMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.ResearchManagerMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.RestaurantMenuModuleMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.RestaurantMenuModuleViewMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.StackMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.TreeMixin',
+        'steve_gall.minecolonies_tweaks.mixin.common.minecolonies.TryResearchMessageMixin'
+    ];
+    for (var uvi = 0; uvi < UV_MC_ADDON_MIXINS.length; uvi++) {
+        (function (fqcn) {
+            UVMAP['uvfixes_mcaddon_optional_' + fqcn.split('.').join('_')] = {
+                'target': { 'type': 'CLASS', 'name': fqcn },
+                'transformer': function (classNode) {
+                    return uvOptionalizeInjectors(classNode, fqcn.substring(fqcn.lastIndexOf('.') + 1));
+                }
+            };
+        })(UV_MC_ADDON_MIXINS[uvi]);
+    }
+    return UVMAP;
 }
 
 // Fix 21 helper: in the named method, replace every

@@ -6,7 +6,7 @@ audio, cosmetic) that would crash or are useless on a dedicated server.
 Copies the rest + config/ + writes start script, server.properties, eula, README.
 NOTE: a headless test-boot is the finalizing step -- it catches any straggler client
 mod that crashes; add it to CURATED and re-run."""
-import os, re, zipfile, shutil, json
+import os, re, zipfile, shutil, json, tomllib
 
 ROOT = r"C:/Users/linde/curseforge/minecraft/Instances/Ultimate vibes distant horizons version"
 OUT  = r"C:/Users/linde/curseforge/UltimateVibes-ServerPack"
@@ -14,7 +14,9 @@ MODS = os.path.join(ROOT, "mods")
 
 # curated client-only mods that do NOT declare side=CLIENT (match by filename substring, lowercase)
 CURATED = [
-    "distanthorizons", "journeymap", "jmi", "jade-", "jadeaddons", "jadecolonies",
+    # NOTE: distanthorizons (server-side LOD gen), journeymap/jmi (server admin + data),
+    # appleskin (server saturation sync) are SERVER-SIDE -> kept, NOT stripped.
+    "jade-", "jadeaddons", "jadecolonies",
     "waveycapes", "skinlayers3d", "betterf3", "euphoriapatcher", "supplemental_patches",
     "irisveil", "continuity", "ambientsounds", "sound_physics", "presencefootsteps",
     "immersive_melodies", "medievalmusic", "biomemusic", "whitenoise", "enhancedvisuals",
@@ -25,7 +27,7 @@ CURATED = [
     "embeddium", "oculus", "rubidium", "nvidium", "iris-", "sodium-", "partic5", "particull",
     "particlerain", "asyncparticles", "lambdynamiclights", "lambdynlights", "subtle_effects",
     "fancymenu", "drippyloadingscreen", "puzzlesaccesspoint", "dynamic_resource_bars",
-    "immersiveoverlays", "appleskin", "bobby", "betterclouds", "complementary", "rpc-", "resourcepackcached",
+    "immersiveoverlays", "bobby", "betterclouds", "complementary", "rpc-", "resourcepackcached",
 ]
 
 def declares_client_only(jar):
@@ -44,9 +46,44 @@ def is_curated(jar):
     jl = jar.lower()
     return any(k in jl for k in CURATED)
 
+def mod_id_ver(jar):
+    """(primary modId, version) from the jar's [[mods]] block ONLY -- parsed as real TOML so
+    a [[dependencies.X]] modId is never mistaken for the mod's own. ('', '') if unreadable."""
+    try:
+        with zipfile.ZipFile(os.path.join(MODS, jar)) as z:
+            for c in ("META-INF/neoforge.mods.toml", "META-INF/mods.toml"):
+                if c in z.namelist():
+                    data = tomllib.loads(z.read(c).decode("utf-8", "replace"))
+                    mods = data.get("mods") or []
+                    if mods:
+                        return (str(mods[0].get("modId", "") or ""), str(mods[0].get("version", "") or ""))
+                    return ("", "")
+    except Exception:
+        pass
+    return ("", "")
+
 jars = [j for j in os.listdir(MODS) if j.endswith(".jar")]
 strip = [j for j in jars if declares_client_only(j) or is_curated(j)]
 keep  = [j for j in jars if j not in strip]
+
+# never ship two jars with the same modId (e.g. a -dev DH build next to the release) -- a
+# dedicated server duplicate-mod-crashes on that. Keep the release; drop the dev/snapshot dup.
+def _is_dev(ver, fname=""): return any(k in (ver + " " + fname).lower() for k in ("dev", "snapshot", "nightly", "+local"))
+_seen, dup_dropped = {}, []
+deduped = []
+for j in sorted(keep):
+    mid, ver = mod_id_ver(j)
+    if mid and mid in _seen:
+        pj, pver = _seen[mid]
+        if _is_dev(ver, j) and not _is_dev(pver, pj):
+            dup_dropped.append((j, mid, "dev-dup")); continue          # this one is the dev dup
+        if _is_dev(pver, pj) and not _is_dev(ver, j):
+            deduped.remove(pj); dup_dropped.append((pj, mid, "dev-dup"))  # previous was the dev dup
+            _seen[mid] = (j, ver); deduped.append(j); continue
+        dup_dropped.append((j, mid, "dup")); continue                  # arbitrary tie -> keep first
+    if mid: _seen[mid] = (j, ver)
+    deduped.append(j)
+keep = deduped
 
 if os.path.isdir(OUT):
     shutil.rmtree(OUT)
@@ -82,6 +119,8 @@ json.dump({"stripped": sorted(strip), "kept_count": len(keep)},
           open(os.path.join(OUT, "_strip_manifest.json"), "w"), indent=1)
 print(f"=== server pack -> {OUT} ===")
 print(f"   kept {len(keep)} mods, stripped {len(strip)} client-only")
+if dup_dropped:
+    print(f"   duplicate-modId jars dropped: {[ (j, mid) for j,mid,_ in dup_dropped ]}")
 print(f"   stripped sample: {sorted(strip)[:8]}")
 print("   + config/, eula, server.properties, user_jvm_args, README")
 print("   NEXT: install NeoForge 21.1.233 dedicated server into the folder, then headless-test.")
