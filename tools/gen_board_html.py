@@ -9,12 +9,12 @@ DEV = M.DEV
 HEROES = M.HEROES
 ORDER = M.ORDER
 
-# copy current SVGs next to the HTML so <img src="detail_svg/x.svg"> resolves on file://
-for sub in ("detail_svg", "ladder_svg"):
+# copy current SVGs + textured PNGs next to the HTML so <img src> resolves on file:// and on git
+for sub in ("detail_svg", "ladder_svg", "detail_tex"):
     dst = os.path.join(DEV, sub); os.makedirs(dst, exist_ok=True)
     if os.path.isdir(sub):
         for f in os.listdir(sub):
-            if f.endswith(".svg"): shutil.copy2(os.path.join(sub, f), os.path.join(dst, f))
+            if f.endswith((".svg", ".png")): shutil.copy2(os.path.join(sub, f), os.path.join(dst, f))
 
 res = json.load(open(M.SRC, encoding="utf-8"))
 by = {}
@@ -50,6 +50,7 @@ for pid in ORDER + [k for k in by if k not in ORDER]:
         imgs.append((put("ladder_svg/%s.svg" % pid, d, ladder=True), ""))
     body = ""
     for src, cap in imgs:
+        src = M.tex_or_svg(src)
         if cap: body += '<div class="cap">%s</div>' % html.escape(cap)
         body += '<img class="render" src="%s" alt="%s" loading="lazy">' % (src, html.escape(nm))
     cards.append('<div class="card"><div class="chead"><h2>%s</h2><span class="id">%s</span>'

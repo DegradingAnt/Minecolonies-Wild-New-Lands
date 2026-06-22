@@ -17,7 +17,7 @@ Originality/inspiration: lantern-of-the-dead pillared lantern-tower + Roman colu
 FORM, technique only -- credited in CREDITS.md, no assets/NBT/palette copied."""
 from iso_render import Iso
 
-S = Iso(U=11)
+S = Iso(U=11, occlusion=True)
 
 # ---- palette (literal) -- a WIDE-contrast ladder: piers + stele read LIGHT, backing wall DARK,
 #      slate roof DARKEST. dark->light: ROOF < WALL < NICHE < AND < SB < PIER < CHIS < STELE < KEY.

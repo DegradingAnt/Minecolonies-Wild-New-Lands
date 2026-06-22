@@ -36,7 +36,7 @@ Grid: x right, z back(0;landward)->front(water), y up.
 """
 from iso_render import Iso
 
-S = Iso(U=20)
+S = Iso(U=20, occlusion=True)
 
 # --- palette (literal) -- warm worn timber-frame fishery over cool water; wide-contrast ladder ----
 WATER  = "#3f7a98"   # open water under the porch posts (cool blue -> pushes the warm timber off it)

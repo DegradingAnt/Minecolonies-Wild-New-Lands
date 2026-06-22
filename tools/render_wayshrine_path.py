@@ -12,7 +12,7 @@ distance_decay-gated weathering picks. ISO: niche opens on the FRONT (max-z) fac
 Originality/inspiration: the European wayside aedicula FORM, technique only -- credited in CREDITS.md."""
 from iso_render import Iso
 
-S = Iso(U=22)
+S = Iso(U=22, occlusion=True)
 
 # ---- palette (literal) -- a clear luminance ladder so dressed stone reads distinct from cobble-tier.
 #      dark->light: NICHE < STEP < SB < MSB < WALLP < CHIS < LEDGE.

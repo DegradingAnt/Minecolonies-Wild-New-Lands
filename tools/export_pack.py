@@ -31,9 +31,14 @@ SERVER_TUNED_CONFIGS = [
     "minecolonies-server.toml", "doespotatotick-common.toml", "entityculling.json",
     "perf_tweaks", "moreculling.toml", "subtle_effects",
 ]
-# server-relevant custom mods (worldgen/server-side) -- DHSmooth is client-only and excluded
-SERVER_MODS = ["WNL-PackFixes-", "WNL-MineColoniesCache-",
-               "WNL-ArchersAttrFix-", "WNL-FTBChunksOffload-"]
+# Server-safe custom mods (worldgen + server-side fixes). CLIENT-ONLY, excluded: WNL-DHSmooth (DH
+# render-thread smoothing, client classes) + WNL-JEIBoost (JEI is client-only). EVERY other WNL custom
+# runs server-side and MUST ship here: ColonyBorder/JoinGate are the worldgen-deadlock + join fixes the
+# server needs, Pathways/PathBridges are the procedural road+deco generators. (Missing 3 of these once
+# silently shipped a server without the deadlock + join fixes — keep this = all non-client-only customs.)
+SERVER_MODS = ["WNL-PackFixes-", "WNL-MineColoniesCache-", "WNL-ArchersAttrFix-",
+               "WNL-FTBChunksOffload-", "WNL-ColonyBorder-", "WNL-JoinGate-",
+               "WNL-PathBridges-", "WNL-Pathways-"]
 
 
 def cp(src, dst):

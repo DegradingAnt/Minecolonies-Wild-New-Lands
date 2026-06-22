@@ -15,7 +15,7 @@ corner stairs meeting a centre keystone resting on the wall course above; beam =
 Originality/inspiration: wayside aedicula + lantern-house FORM, technique only -- credited CREDITS.md."""
 from iso_render import Iso
 
-S = Iso(U=15)
+S = Iso(U=15, occlusion=True)
 
 # ---- palette (literal) -- a WIDE-contrast ladder so the alcove WALL reads dark, the pillars +
 #      arch frame read light, and the slate roof reads darkest. dark->light:

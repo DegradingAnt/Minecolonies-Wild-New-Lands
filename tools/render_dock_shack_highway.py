@@ -46,7 +46,7 @@ Grid: x right, z back(0;landward)->front(water), y up.
 """
 from iso_render import Iso
 
-S = Iso(U=15)
+S = Iso(U=15, occlusion=True)
 
 # --- palette (literal) -- masonry ground floor (cool stone) + warm timber jetty above; wide ladder -
 WATER  = "#3f7a98"   # open water under the jetty + winch (cool blue -> the warm hut pops off it)

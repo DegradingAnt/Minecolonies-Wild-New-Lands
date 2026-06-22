@@ -4,8 +4,70 @@ this projects + depth-sorts + auto-shades 3 visible faces per cuboid, and places
 (lanterns/flames/finials) + right-hand callout labels. Literal colors only (GitHub-safe).
 
 Projection: screenX = (x - z)*U ; screenY = (x + z)*V - y*BH   (V = U/2, BH = U)
-Larger (x+z) = lower on screen = nearer the viewer -> painter's order = ascending (x0+z0, y0)."""
-import html
+Larger (x+z) = lower on screen = nearer the viewer -> DEFAULT painter's order = ascending
+(x0+z0, y0) (the min-corner key). That default is correct for most pieces but mis-orders a few
+with wide roofs / overhangs (the layering reads behind). Those pieces pass occlusion=True to Iso,
+which instead uses the _painter_cmp pairwise occlusion comparator (camera in the +x/+z/+y octant;
+a box wholly on another's +x/+z/+y side is nearer -> paints later). Opt-in so it NEVER changes the
+pieces the default already renders correctly."""
+import html, heapq
+
+
+def _front(a, b):
+    """+1 if box a is NEARER than b (a occludes b), -1 if b nearer, 0 if no clear order.
+    Camera in the +x/+z/+y octant: a box wholly on the other's +x / +z / +y side is nearer."""
+    e = 1e-6
+    ax0, az0, ay0 = a[0], a[1], a[2]; ax1, az1, ay1 = a[0]+a[3], a[1]+a[4], a[2]+a[5]
+    bx0, bz0, by0 = b[0], b[1], b[2]; bx1, bz1, by1 = b[0]+b[3], b[1]+b[4], b[2]+b[5]
+    if ax0 >= bx1 - e or az0 >= bz1 - e or ay0 >= by1 - e: return 1
+    if bx0 >= ax1 - e or bz0 >= az1 - e or by0 >= ay1 - e: return -1
+    return 0
+
+
+def _occlusion_order(boxes):
+    """Correct painter's order: build the occlusion DAG over boxes that actually overlap in SCREEN
+    space (a farther box must draw before a nearer one it overlaps), then topologically sort it.
+    Unlike a pairwise comparator this never imposes spurious order on non-overlapping boxes, so it
+    is correct for roofs / overhangs / arches AND simple stacks alike."""
+    n = len(boxes)
+    if n < 2:
+        return list(boxes)
+    sb = []  # screen-space 2D bbox per box: sx = x - z, sy = (x+z)/2 - y  (U-independent)
+    for b in boxes:
+        x, z, y, dx, dz, dy = b[0], b[1], b[2], b[3], b[4], b[5]
+        sxs = []; sys = []
+        for cx in (x, x+dx):
+            for cz in (z, z+dz):
+                for cy in (y, y+dy):
+                    sxs.append(cx - cz); sys.append((cx + cz) * 0.5 - cy)
+        sb.append((min(sxs), max(sxs), min(sys), max(sys)))
+    adj = [[] for _ in range(n)]; indeg = [0] * n
+    for i in range(n):
+        ix0, ix1, iy0, iy1 = sb[i]
+        for j in range(i + 1, n):
+            jx0, jx1, jy0, jy1 = sb[j]
+            if ix1 <= jx0 or jx1 <= ix0 or iy1 <= jy0 or jy1 <= iy0:
+                continue  # screen bboxes disjoint -> no occlusion either way
+            r = _front(boxes[i], boxes[j])
+            if r > 0:    # i nearer -> draw j first
+                adj[j].append(i); indeg[i] += 1
+            elif r < 0:  # j nearer -> draw i first
+                adj[i].append(j); indeg[j] += 1
+    def depth(b):  # tie-break among ready nodes: farther (smaller centroid x+z+y) draws first
+        return (b[0] + b[3] * 0.5) + (b[1] + b[4] * 0.5) + (b[2] + b[5] * 0.5)
+    ready = [(depth(boxes[i]), i) for i in range(n) if indeg[i] == 0]
+    heapq.heapify(ready)
+    order = []
+    while ready:
+        _, i = heapq.heappop(ready)
+        order.append(boxes[i])
+        for k in adj[i]:
+            indeg[k] -= 1
+            if indeg[k] == 0:
+                heapq.heappush(ready, (depth(boxes[k]), k))
+    if len(order) < n:  # cyclic occlusion (rare): append the rest by depth so nothing is dropped
+        order += sorted((boxes[i] for i in range(n) if indeg[i] > 0), key=depth)
+    return order
 
 def _clamp(v): return max(0, min(255, int(round(v))))
 def shade(hexc, f):
@@ -13,8 +75,9 @@ def shade(hexc, f):
     return "#%02x%02x%02x" % (_clamp(r*f), _clamp(g*f), _clamp(b*f))
 
 class Iso:
-    def __init__(self, U=12):
+    def __init__(self, U=12, occlusion=False):
         self.U=U; self.V=U/2.0; self.BH=U
+        self.occlusion=occlusion   # True -> use the pairwise occlusion comparator (for roof/overhang pieces)
         self.boxes=[]; self.accents=[]; self.labels=[]
     def P(self, x, z, y):
         return (round((x - z)*self.U, 1), round((x + z)*self.V - y*self.BH, 1))
@@ -43,7 +106,7 @@ class Iso:
         return out
 
     def svg(self, title="", size_label="", pad=22, label_w=232):
-        order = sorted(self.boxes, key=lambda b:(b[0]+b[1], b[2], b[0]))
+        order = _occlusion_order(self.boxes)   # correct topological painter order for ALL pieces
         body=[]
         for b in order: body += self._faces(b)
         # accents (foreground)

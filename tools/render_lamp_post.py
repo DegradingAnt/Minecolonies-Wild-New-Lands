@@ -39,7 +39,7 @@ an arrangement none of those sources use -- original WNL geometry. Same wnl_lamp
 top two rungs ship as one NBT template per tier, palette-swapped per biome (silhouette constant)."""
 from iso_render import Iso
 
-S = Iso(U=15)
+S = Iso(U=15, occlusion=True)
 
 # --- palette (literal) -- a REAL value triad anchored by a cool DARK SLATE: DARK pier drum mass
 #     -> mid dressed stone -> near-white HERO chiseled stone (keystone/quoins), warm dark-timber

@@ -8,6 +8,17 @@ SRC = "deco_catalog_v2.json"
 DEV = "C:/Users/linde/curseforge/minecraft/Instances/Ultimate vibes distant horizons version/_dev/wnl-pathways-src"
 os.makedirs("ladder_svg", exist_ok=True)
 
+
+def tex_or_svg(rel):
+    """Prefer the TEXTURED png render (detail_tex/) over the flat-colour svg (detail_svg/) when one
+    exists; massing-ladder svgs (no png) pass through unchanged. The board thus shows real MC textures."""
+    if rel.startswith("detail_svg/") and rel.endswith(".svg"):
+        png = "detail_tex/" + rel[len("detail_svg/"):-4] + ".png"
+        if os.path.exists(png):
+            return png
+    return rel
+
+
 HEROES = {"gatehouse", "harbour"}
 ORDER = ["gatehouse","harbour","wayshrine","well","obelisk","plaza","rest_stop",
          "banner_stand","milestone","lamp_post","dock_shack","pier","menhir","cairn"]
@@ -171,18 +182,19 @@ def main():
             detailed += 1
             top_lbl = "R5 — Great Road" if pid == "cairn" else ("H6 — hero render" if hero else "top tier")
             badge = "FINAL · " + ("HERO · H6" if hero else "R5") + (" · full ladder" if low else "")
-            imgs.append(("design/detail_svg/%s.svg" % pid, top_lbl))
+            imgs.append(("detail_svg/%s.svg" % pid, top_lbl))
             if low:    # hand-detailed lower tiers -> show the real ladder, not the blob
-                imgs += [("design/" + src, lbl) for src, lbl in low]
+                imgs += [(src, lbl) for src, lbl in low]
             elif hero: # fallback: heroes still get the dims-only R1-R5 ladder under the H6 render
                 open("ladder_svg/%s_lower.svg" % pid, "w", encoding="utf-8").write(ladder_svg(d, drop_last=True))
-                imgs.append(("design/ladder_svg/%s_lower.svg" % pid, "R1–R5 tiers (massing)"))
+                imgs.append(("ladder_svg/%s_lower.svg" % pid, "R1–R5 tiers (massing)"))
         else:
             open("ladder_svg/%s.svg" % pid, "w", encoding="utf-8").write(ladder_svg(d))
             badge = "HERO · H6" if hero else "R1–R5"
-            imgs.append(("design/ladder_svg/%s.svg" % pid, ""))
+            imgs.append(("ladder_svg/%s.svg" % pid, ""))
         lines += [f"## {nm} &nbsp;·&nbsp; `{rid}` &nbsp;·&nbsp; _{badge}_", "", role, ""]
         for src, cap in imgs:
+            src = tex_or_svg(src)
             if cap: lines.append(f"**{cap}**")
             lines += [f'<img src="{src}" width="840" alt="{nm}">', "", f"<sub>[open full image]({src})</sub>", ""]
         lines += ["---", ""]

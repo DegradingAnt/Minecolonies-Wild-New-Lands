@@ -16,7 +16,7 @@ wnl_menhir data builder as render_menhir.py (great_road top); hashes lean/taper/
 ISO: road-facing FRONT = high-z (south) + high-x (east) -- the worn step + fallen stone read on that front."""
 from iso_render import Iso
 
-S = Iso(U=20)
+S = Iso(U=20, occlusion=True)
 
 # palette (literal) -- WIDE-CONTRAST: the LAID plinth (cool dressed greys) vs the ROUGH shaft (warm
 # fieldstone) is the whole story of this tier (first human care under a still-rough stone).

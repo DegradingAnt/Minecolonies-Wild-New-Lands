@@ -24,7 +24,7 @@ structurize big-well + MineColonies wells for the civic-well ROLE, and CTOV / Du
 rustic roofing for the course-built hip. Entirely original WNL vanilla-block build."""
 from iso_render import Iso
 
-S = Iso(U=11)
+S = Iso(U=11, occlusion=True)
 
 # ---- palette (literal) -- a clear luminance ladder so NO two adjacent faces blend ----
 # THREE families kept far apart: (a) cool blue-grey dais (darkest stone, the base mass),

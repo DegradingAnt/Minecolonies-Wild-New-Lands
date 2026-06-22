@@ -28,7 +28,7 @@ spout-and-cascade WATER ARCHITECTURE is deliberately NOT the chain-and-bucket cl
 ISO: road-facing FRONT = high-z (south) + high-x (east); apron, front piers, front-bay read on the front."""
 from iso_render import Iso
 
-S = Iso(U=15)
+S = Iso(U=15, occlusion=True)
 
 # ---- palette (literal) -- a wide-contrast ladder: cool stone-brick mass, pale dressed chiseled
 #      accents, warm oak frame, dark-brown roof against the pale stone, saturated water ----

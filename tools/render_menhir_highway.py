@@ -21,7 +21,7 @@ top, h16/3 lanterns) -- one step less grand; hashes lean/taper/decay/palette/chi
 ISO: road-facing FRONT = high-z (south) + high-x (east) -- the carved socket + lantern read on that front."""
 from iso_render import Iso
 
-S = Iso(U=17)
+S = Iso(U=17, occlusion=True)
 
 # palette (literal) -- WIDE-CONTRAST 3-zone ladder (cf. render_menhir top):
 #   ZONE A (the APRON) = cool dressed greys, grounded + receding.

@@ -14,7 +14,7 @@ single standing stones (menhirs). Same wnl_menhir data builder as render_menhir.
 the builder hashes lean/taper/scatter/decay/palette live per spawn."""
 from iso_render import Iso
 
-S = Iso(U=24)
+S = Iso(U=24, occlusion=True)
 
 # palette (literal) -- WIDE-CONTRAST ladder; still primal so only stone + earth families.
 CORE   = "#8a8276"   # cobblestone core (the lower rooted course of the upright)

@@ -31,7 +31,7 @@ Grid: x right, z back(0;landward)->front(water), y up.
 """
 from iso_render import Iso
 
-S = Iso(U=27)
+S = Iso(U=27, occlusion=True)
 
 # --- palette (literal) -- warm worn spruce hut over a cool waterline; a wide-contrast ladder -----
 WATER  = "#3f7a98"   # open water under the overhanging water-side corners (cool blue, pushes the hut off it)

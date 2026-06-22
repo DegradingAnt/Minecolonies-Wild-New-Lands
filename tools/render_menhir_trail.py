@@ -13,7 +13,7 @@ same wnl_menhir whose great_road top tier is render_menhir.py; the data builder 
 lean/decay/palette live per spawn."""
 from iso_render import Iso
 
-S = Iso(U=26)
+S = Iso(U=26, occlusion=True)
 
 # palette (literal) -- WIDE-CONTRAST ladder so every material reads as itself after the
 # renderer's 0.84/0.70 face-shading. Only 3 stone families at the floor of the ladder:

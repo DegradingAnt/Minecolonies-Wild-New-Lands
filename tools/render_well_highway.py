@@ -30,7 +30,7 @@ ISO: road-facing FRONT = high-z (south) + high-x (east); apron steps, front pier
 on the front; the cupola-beacon crowns the centre."""
 from iso_render import Iso
 
-S = Iso(U=12)
+S = Iso(U=12, occlusion=True)
 
 # ---- palette (literal) -- a wide-contrast ladder across FOUR families kept far apart:
 #   cool stone-brick mass / pale dressed chiseled accents / warm stripped-oak frame /

@@ -18,7 +18,7 @@ wayside aedicula / lantern-of-the-dead / wayside chapel + the Roman columned roa
 corbel gateway-over-the-road. All vanilla blocks; geometry/arch/niche/plinth are original WNL."""
 from iso_render import Iso
 
-S = Iso(U=8)
+S = Iso(U=8, occlusion=True)
 
 # ---- palette (literal) -- a clear luminance ladder so no two adjacent faces blend.
 #      Convention (gatehouse/plaza): the COLONNADE + dressed accents read LIGHT, the cella WALL is
