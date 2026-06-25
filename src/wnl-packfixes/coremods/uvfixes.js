@@ -653,6 +653,32 @@ function initializeCoreMod() {
                     }
                 }
                 log(done ? 'quark tiny-potato null-guard applied' : 'quark: target method missing, patch skipped (mod updated?)');
+                // modelBake calls Map.compute on ModernFix's immutable EmulatedModelRegistry (dynamic_resources):
+                // compute's internal put()/remove() both throw UnsupportedOperationException on the read-only
+                // DynamicMap. ModernFix re-fires the ModifyBakingResult event per-namespace so the throw surfaces
+                // under foreign-mod scope (e.g. supplementaries). Guard modelBake to no-op on UOE only -- the one
+                // exception that is impossible-to-satisfy here (the tiny_potato model wrapper is already abandoned
+                // today when the op throws, so this removes the spam + aborted-iteration with no behaviour change).
+                var uoe = false;
+                for (var k = 0; k < classNode.methods.size(); k++) {
+                    var mm = classNode.methods.get(k);
+                    if (mm.name.equals('modelBake') && mm.desc.equals('(Lorg/violetmoon/zeta/client/event/load/ZModel$ModifyBakingResult;)V')) {
+                        var ps = new LabelNode();
+                        var pe = new LabelNode();
+                        var ph = new LabelNode();
+                        mm.instructions.insert(ps);
+                        var ptail = new InsnList();
+                        ptail.add(pe);
+                        ptail.add(ph);
+                        ptail.add(new InsnNode(Opcodes.POP));
+                        ptail.add(new InsnNode(Opcodes.RETURN));
+                        mm.instructions.add(ptail);
+                        mm.tryCatchBlocks.add(new TryCatchBlockNode(ps, pe, ph, 'java/lang/UnsupportedOperationException'));
+                        uoe = true;
+                        break;
+                    }
+                }
+                log(uoe ? 'quark tiny-potato modelBake compute UOE-guard applied' : 'quark tiny-potato: modelBake target missing, skipped (mod updated?)');
                 return classNode;
             }
         },
@@ -2097,6 +2123,116 @@ function initializeCoreMod() {
                 log(swapped > 0
                     ? 'DH InternalServerGenerator: bumped gen-ticket level 33 -> 34 (x' + swapped + ') -- DH distant gen now yields to player chunks (no starvation) + caps at initialize_light (keeps features/structures)'
                     : 'DH InternalServerGenerator: gen-ticket level-33 site not found, patch skipped (DH internals changed)');
+                return classNode;
+            }
+        },
+        // Fix 50: CIT Resewn's brokenpaths probe (AbstractFileResourcePackMixin, @Inject TAIL of
+        // PackResources.getMetadataSection) loops namespaces calling listResources(type, ns, "", noop)
+        // with an EMPTY path-prefix. For folder packs FileUtil.decomposePath("") -> DataResult.error ->
+        // 'Invalid path : Invalid path ' logged 1337x/boot (91% of all error spam). decomposePath("/") ->
+        // success(emptyList) -> walks the namespace root identically; the no-op consumer discards results
+        // exactly as before -- a TRUE fix (the probe still completes), not a mask. Rewrite the "" prefix LDC
+        // -> "/" in the mixin class BEFORE Mixin merges it into every pack class so the corrected constant
+        // propagates. (NOT Veil -- its empty-prefix site is dead code for these packs; verifier-corrected.)
+        'uvfixes_citresewn_brokenpaths_empty_prefix': {
+            'target': { 'type': 'CLASS', 'name': 'schm.shsupercm.citresewn.mixin.AbstractFileResourcePackMixin' },
+            'transformer': function (classNode) {
+                var hits = 0;
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    if (!m.name.equals('citresewn$brokenpaths$parseMetadata')) continue;
+                    var insns = m.instructions.toArray();
+                    for (var j = 0; j < insns.length; j++) {
+                        var insn = insns[j];
+                        if (insn instanceof LdcInsnNode && insn.cst.equals('')) {
+                            insn.cst = '/';
+                            hits++;
+                        }
+                    }
+                }
+                log(hits > 0 ? 'citresewn AbstractFileResourcePackMixin brokenpaths empty listResources prefix -> "/" (' + hits + ' sites)' : 'citresewn AbstractFileResourcePackMixin: 0 empty-prefix sites (citresewn updated?)');
+                return classNode;
+            }
+        },
+        // Fix 51: ItemStack.parse logs 'Tried to load invalid item: {}' at ERROR for every baked structure
+        // air-slot (65/boot) and removed-content ref (apotheosis:long_sundering potion). The CODEC recovery
+        // is unchanged (resultOrPartial still returns the partial/EMPTY -> empty slot / plain arrow); only the
+        // cosmetic ERROR line is spurious -- the data genuinely refs absent content across 39 structure mods,
+        // nothing fixable exists to point them at. Suppress just the log by returning at the head of the
+        // error-log lambda. Matched robustly (lambda index drifts across MC patches): name startsWith
+        // lambda$parse$ + desc (String)V + body LDCs the exact message string.
+        'uvfixes_itemstack_invalid_item_log': {
+            'target': { 'type': 'CLASS', 'name': 'net.minecraft.world.item.ItemStack' },
+            'transformer': function (classNode) {
+                var done = false;
+                var MSG = "Tried to load invalid item: '{}'";
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    if (!(m.name.startsWith('lambda$parse$') && m.desc.equals('(Ljava/lang/String;)V'))) continue;
+                    var ok = false;
+                    var insns = m.instructions.toArray();
+                    for (var j = 0; j < insns.length; j++) {
+                        if (insns[j] instanceof LdcInsnNode && insns[j].cst.equals(MSG)) { ok = true; break; }
+                    }
+                    if (!ok) continue;
+                    m.instructions.insert(new InsnNode(Opcodes.RETURN));
+                    done = true;
+                    break;
+                }
+                log(done ? 'itemstack invalid-item log suppressed (baked structure air/removed-potion slots; CODEC recovery unchanged)' : 'itemstack: lambda$parse$ invalid-item log not found, patch skipped (mod updated?)');
+                return classNode;
+            }
+        },
+        // Fix 52: AllTheLeaks 1.1.9 UntrackedIssue001 hard-references supplementaries ColoredMapHandler
+        // (REMOVED in supplementaries 3.7.4); its open versionRange [1.21-3.1.8,) runs it anyway -> the
+        // <clinit> ReflectionHelper.getMethodFromClass(ColoredMapHandler,...) throws -> ExceptionInInitializer
+        // 'Failed to instantiate constructor' (the whole leak-fix silently never applies). Remove the two
+        // ColoredMapHandler refs: (A) the direct clearIdCache()V invokestatic in clearRemaining, and (B) the
+        // <clinit> reflection-lookup block (anchor `ldc class ColoredMapHandler` through its `astore_0`; the
+        // resolved handle is stored to a write-only discarded local, so excision leaves valid bytecode). The
+        // other two clears (WeatheredMapRecipe, EndermanSkullBlockTile) stay -> the leak-fix initialises +
+        // runs its still-valid parts. Revert when AllTheLeaks drops/guards the ref.
+        'uvfixes_alltheleaks_coloredmaphandler': {
+            'target': { 'type': 'CLASS', 'name': 'dev.uncandango.alltheleaks.leaks.common.mods.supplementaries.UntrackedIssue001' },
+            'transformer': function (classNode) {
+                var removed = 0;
+                var CMH = 'net/mehvahdjukaar/supplementaries/common/misc/map_data/ColoredMapHandler';
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    if (m.name.equals('clearRemaining') && m.desc.equals('(Lnet/neoforged/neoforge/event/server/ServerStoppedEvent;)V')) {
+                        var insnsA = m.instructions.toArray();
+                        for (var a = 0; a < insnsA.length; a++) {
+                            var ia = insnsA[a];
+                            if (ia instanceof MethodInsnNode && ia.getOpcode() === Opcodes.INVOKESTATIC
+                                && ia.owner.equals(CMH) && ia.name.equals('clearIdCache') && ia.desc.equals('()V')) {
+                                m.instructions.remove(ia);
+                                removed++;
+                            }
+                        }
+                    }
+                    if (m.name.equals('<clinit>') && m.desc.equals('()V')) {
+                        var insnsB = m.instructions.toArray();
+                        for (var b = 0; b < insnsB.length; b++) {
+                            var ib = insnsB[b];
+                            if (ib instanceof LdcInsnNode && ib.cst instanceof AsmType
+                                && ib.cst.getInternalName().equals(CMH)) {
+                                var seq = [];
+                                var cur = ib;
+                                var foundStore = false;
+                                for (var c = 0; c < 12 && cur !== null; c++) {
+                                    seq.push(cur);
+                                    if (cur instanceof VarInsnNode && cur.getOpcode() === Opcodes.ASTORE) { foundStore = true; break; }
+                                    cur = cur.getNext();
+                                }
+                                if (foundStore) {
+                                    for (var r = 0; r < seq.length; r++) { m.instructions.remove(seq[r]); removed++; }
+                                }
+                                break;
+                            }
+                        }
+                    }
+                }
+                log(removed > 0 ? 'alltheleaks UntrackedIssue001 ColoredMapHandler refs removed (' + removed + ' insns; ran on supp 3.7.4 where ColoredMapHandler was removed)' : 'alltheleaks UntrackedIssue001: ColoredMapHandler refs not found (0) -- AllTheLeaks or Supplementaries updated? auto-disarm');
                 return classNode;
             }
         },
