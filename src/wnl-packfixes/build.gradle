@@ -1,0 +1,25 @@
+plugins {
+    id 'base'   // lifecycle only (assemble/build/clean) — PackFixes is a pure JS coremod, no Java to compile
+}
+
+version = '1.45.0'
+group = 'com.wnl'
+
+// PackFixes is a lowcodefml JS coremod. The shipped jar is EXACTLY these 3 files
+// (this replaces the old python rezip). The dev tools (ParseCheck.java / ScanTweaks / PatchDhJar),
+// the jar/ staging dir, and the unused Java-coremod attempt are NOT shipped.
+tasks.register('coremodJar', Jar) {
+    archiveBaseName = 'WNL-PackFixes'
+    archiveVersion = project.version
+    destinationDirectory = layout.buildDirectory.dir('libs')
+    from(projectDir) {
+        include 'META-INF/neoforge.mods.toml'
+        include 'META-INF/coremods.json'
+        include 'coremods/uvfixes.js'
+    }
+}
+tasks.named('assemble') { dependsOn 'coremodJar' }
+
+// TODO (next): wire the Nashorn+ASM parse-check (ParseCheck.java) as a JavaExec 'check' task so the
+// build validates uvfixes.js parses + every transform installs BEFORE shipping — once I've verified
+// ParseCheck's CLI/working-dir interface (don't wire it blind — the lesson).

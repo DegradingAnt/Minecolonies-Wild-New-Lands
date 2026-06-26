@@ -46,11 +46,30 @@ public class DhSmooth {
         loadConfig();
         LOGGER.info("[wnl_dhsmooth] loaded — DH LOD draw-batch smoothing (enabled={}, new/frame={}, max/frame={}, remember={}f, adaptive={})",
                 ENABLED, NEW_BUFFERS_PER_FRAME, MAX_BUFFERS_PER_FRAME, REMEMBER_FRAMES, ADAPTIVE);
+        // Adaptive worker-thread governor: scale DH's worker run-time ratio by live FPS so chunk
+        // generation stops starving the render thread. Game-bus (client) listener; never throws.
+        try {
+            net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(
+                    (net.neoforged.neoforge.client.event.ClientTickEvent.Post e) -> DhThreadGovernor.onClientTick());
+            LOGGER.info("[wnl_dhsmooth] adaptive thread governor registered (enabled={}, good={}fps, bad={}fps, ratio {}–{})",
+                    DhThreadGovernor.ENABLED, DhThreadGovernor.GOOD_FPS, DhThreadGovernor.BAD_FPS,
+                    DhThreadGovernor.FLOOR_RATIO, DhThreadGovernor.CEIL_RATIO);
+        } catch (Throwable t) {
+            LOGGER.warn("[wnl_dhsmooth] governor registration failed: {}", t.toString());
+        }
     }
 
     private static int clampInt(String v, int def, int lo, int hi) {
         try {
             return Math.max(lo, Math.min(hi, Integer.parseInt(v.trim())));
+        } catch (Exception e) {
+            return def;
+        }
+    }
+
+    private static double clampDouble(String v, double def, double lo, double hi) {
+        try {
+            return Math.max(lo, Math.min(hi, Double.parseDouble(v.trim())));
         } catch (Exception e) {
             return def;
         }
@@ -69,6 +88,12 @@ public class DhSmooth {
                 NEW_BUFFERS_PER_FRAME = clampInt(p.getProperty("newBuffersPerFrame", "16"), 16, 1, 4096);
                 MAX_BUFFERS_PER_FRAME = clampInt(p.getProperty("maxBuffersPerFrame", "64"), 64, NEW_BUFFERS_PER_FRAME, 8192);
                 REMEMBER_FRAMES = clampInt(p.getProperty("rememberFrames", "200"), 200, 0, 100000);
+                DhThreadGovernor.ENABLED = Boolean.parseBoolean(p.getProperty("governor", "true").trim());
+                DhThreadGovernor.GOOD_FPS = clampDouble(p.getProperty("governorGoodFps", "70"), 70, 15, 1000);
+                DhThreadGovernor.BAD_FPS = clampDouble(p.getProperty("governorBadFps", "45"), 45, 5, 999);
+                DhThreadGovernor.FLOOR_RATIO = clampDouble(p.getProperty("governorFloorRatio", "0.10"), 0.10, 0.01, 1.0);
+                DhThreadGovernor.CEIL_RATIO = clampDouble(p.getProperty("governorCeilRatio", "1.00"), 1.00, 0.05, 1.0);
+                DhThreadGovernor.SMOOTH = clampDouble(p.getProperty("governorSmooth", "0.20"), 0.20, 0.01, 1.0);
                 return;
             }
             Files.createDirectories(f.getParent());
@@ -82,7 +107,22 @@ public class DhSmooth {
                     + "# How long (in frames) a shown LOD is remembered so it returns INSTANTLY\n"
                     + "# (turning around / re-entering a view). ~200 = a couple seconds.\n"
                     + "rememberFrames=200\n"
-                    + "adaptive=true\n");
+                    + "adaptive=true\n"
+                    + "\n"
+                    + "# --- Adaptive DH worker-thread governor (smooths FPS during chunk generation) ---\n"
+                    + "# DH's LOD/world-gen workers compete with Sodium + worldgen for CPU; under load that\n"
+                    + "# starves the render thread. This scales DH's worker run-time ratio by your live FPS:\n"
+                    + "# full speed when FPS is high, throttled when it dips. LOD quality/range NEVER change.\n"
+                    + "governor=true\n"
+                    + "# At/above this FPS, DH runs at governorCeilRatio (full speed).\n"
+                    + "governorGoodFps=70\n"
+                    + "# At/below this FPS, DH is throttled to governorFloorRatio.\n"
+                    + "governorBadFps=45\n"
+                    + "# Min/max DH worker run-time ratio (fraction of time workers run vs sleep).\n"
+                    + "governorFloorRatio=0.10\n"
+                    + "governorCeilRatio=1.00\n"
+                    + "# Easing per update (0..1) so the rate doesn't oscillate.\n"
+                    + "governorSmooth=0.20\n");
         } catch (Throwable t) {
             LOGGER.warn("[wnl_dhsmooth] config load failed, using defaults: {}", t.toString());
         }
