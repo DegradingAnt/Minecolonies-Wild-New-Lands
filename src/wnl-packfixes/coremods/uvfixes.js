@@ -279,6 +279,98 @@ function initializeCoreMod() {
                 return classNode;
             }
         },
+        // Fix: AdditionalStructures Events.onClientTick reads Config.UPDATE_CHECKER.get() EVERY client tick
+        // (its update-checker phone-home). Its only guard is a field-null check, NOT a config-loaded check,
+        // so at the main menu -- before AS's client config loads -- .get() throws "Cannot get config value
+        // before config is loaded" and the game crashes on the first client tick. Became deterministic once
+        // ~10 added mods delayed config load past tick 1. (smsn mixins the same CLASS but only its
+        // SupporterCheck/SupporterRewards/onPlayerLogin methods -- NOT onClientTick -- so it's a red herring.)
+        // The whole method IS the update checker, a network feature the pack already neuters via smsn, so the
+        // safest fix is to no-op the tick entirely: insert RETURN at HEAD. No content lost. Self-no-ops with a
+        // log line if AS renames/removes onClientTick (mod updated -> recheck if upstream guarded it).
+        'uvfixes_additionalstructures_kill_updatechecker_tick': {
+            'target': { 'type': 'CLASS', 'name': 'xxrexraptorxx.additionalstructures.utils.Events' },
+            'transformer': function (classNode) {
+                var done = false;
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    if (m.name.equals('onClientTick')
+                            && m.desc.equals('(Lnet/neoforged/neoforge/client/event/ClientTickEvent$Pre;)V')) {
+                        var list = new InsnList();
+                        list.add(new InsnNode(Opcodes.RETURN));
+                        m.instructions.insert(list);
+                        done = true;
+                        break;
+                    }
+                }
+                log(done ? 'additionalstructures Events.onClientTick no-op\'d (kills update-checker config-before-load crash at menu)' : 'additionalstructures: onClientTick(ClientTickEvent$Pre)V not found, patch skipped (mod updated?)');
+                return classNode;
+            }
+        },
+        // Fix 56: createaeronauticscurios 2.1 (aeronautics_curios_compat) ClientKeyInputHandler.onClientTick
+        // calls ModKeyBindings.REMOTE_USE.consumeClick() every client tick, but REMOTE_USE is null because the
+        // mod's keybinding/feature init is skipped under the bundled Create Aeronautics 1.3.0 mismatch (same
+        // family as the LinkedTypewriter injector strips above) -> NPE on the first client tick, hard crash.
+        // HEAD-guard: if REMOTE_USE is null, return (skip the whole handler -- the remote-use + remote-typewriter
+        // feature is already non-functional under the mismatch). Self-heals (runs normally) if a matched Create
+        // Aeronautics ever registers the keybinding. Self-no-ops with a log line if the mod renames the method.
+        'uvfixes_aerocurios_guard_null_keybind_tick': {
+            'target': { 'type': 'CLASS', 'name': 'com.titammods.aeronautics_curios_compat.event.client.ClientKeyInputHandler' },
+            'transformer': function (classNode) {
+                var done = false;
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    if (m.name.equals('onClientTick')
+                            && m.desc.equals('(Lnet/neoforged/neoforge/client/event/ClientTickEvent$Post;)V')) {
+                        var list = new InsnList();
+                        var cont = new LabelNode();
+                        // if (ModKeyBindings.REMOTE_USE == null) return;
+                        list.add(new FieldInsnNode(Opcodes.GETSTATIC, 'com/titammods/aeronautics_curios_compat/registry/ModKeyBindings', 'REMOTE_USE', 'Lnet/minecraft/client/KeyMapping;'));
+                        list.add(new JumpInsnNode(Opcodes.IFNONNULL, cont));
+                        list.add(new InsnNode(Opcodes.RETURN));
+                        list.add(cont);
+                        m.instructions.insert(list);
+                        done = true;
+                        break;
+                    }
+                }
+                log(done ? 'aerocurios ClientKeyInputHandler.onClientTick null-REMOTE_USE guard added (no keybinding NPE under the Create Aeronautics version mismatch)' : 'aerocurios: onClientTick(ClientTickEvent$Post)V not found, patch skipped (mod updated?)');
+                return classNode;
+            }
+        },
+        // Fix 57: GLOBAL forgified-fabric-api (FFAPI) entity-attribute timing fix. FFAPI's
+        // FabricDefaultAttributeRegistry.register(EntityType, AttributeSupplier) eagerly puts into vanilla
+        // DefaultAttributes DURING a mod's RegisterEvent, forcing DefaultAttributes.<clinit> before later
+        // registries (e.g. atmospheric's camel_variant entity_data_serializer) have bound -> "Trying to
+        // access unbound value" NPE poisons the vanilla class -> whole-load cascade (lne_wizards ->
+        // takesapillage/magistuarmory unbound -> animatica config-not-loaded at render). FIX: rewrite the
+        // register(EntityType, AttributeSupplier) body to HEAD-call WNL-FFAPIAttrFix's enqueue() in place of
+        // the eager put, then RETURN; the wnl_ffapiattr addon replays the queue at EntityAttributeCreationEvent
+        // (correct NeoForge timing, after ALL registration). The Builder overload funnels through this one, so
+        // this single redirect covers every FFAPI-attribute mod (the LNE series + future). SHIP WITH
+        // WNL-FFAPIAttrFix-1.0.0.jar (removing that jar makes this enqueue() call dangle).
+        'uvfixes_ffapi_defer_attribute_register': {
+            'target': { 'type': 'CLASS', 'name': 'net.fabricmc.fabric.api.object.builder.v1.entity.FabricDefaultAttributeRegistry' },
+            'transformer': function (classNode) {
+                var done = false;
+                for (var i = 0; i < classNode.methods.size(); i++) {
+                    var m = classNode.methods.get(i);
+                    if (m.name.equals('register')
+                            && m.desc.equals('(Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ai/attributes/AttributeSupplier;)V')) {
+                        var list = new InsnList();
+                        list.add(new VarInsnNode(Opcodes.ALOAD, 0));   // EntityType (static -> slot 0)
+                        list.add(new VarInsnNode(Opcodes.ALOAD, 1));   // AttributeSupplier
+                        list.add(new MethodInsnNode(Opcodes.INVOKESTATIC, 'com/wnl/ffapiattr/FfapiAttrDefer', 'enqueue', '(Lnet/minecraft/world/entity/EntityType;Lnet/minecraft/world/entity/ai/attributes/AttributeSupplier;)V', false));
+                        list.add(new InsnNode(Opcodes.RETURN));
+                        m.instructions.insert(list);
+                        done = true;
+                        break;
+                    }
+                }
+                log(done ? 'FFAPI FabricDefaultAttributeRegistry.register(type,supplier) deferred to wnl_ffapiattr queue (kills the DefaultAttributes-clinit-too-early cascade for ALL FFAPI-attribute mods)' : 'FFAPI: register(EntityType,AttributeSupplier)V not found, patch skipped (FFAPI updated?)');
+                return classNode;
+            }
+        },
         // Fix 31: THE core DO icon fix. Continuity's ModelWrappingHandler.wrap() wraps DO's
         // MateriallyTexturedBakedModel in an EmissiveBakedModel/CtmBakedModel (Fabric
         // ForwardingBakedModel, isVanillaAdapter=false). Under Sodium that flips DO's item onto a

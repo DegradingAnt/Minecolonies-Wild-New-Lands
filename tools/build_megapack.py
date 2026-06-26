@@ -9,13 +9,20 @@ import os, io, json, zipfile, re
 
 DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(DIR)
-RP = os.path.join(ROOT, "resourcepacks")
+RP = os.path.join(ROOT, "resourcepacks")          # OUTPUT lives here (the merged megapack)
+# SOURCE packs live in resourcepacks/ alongside the output, so CurseForge surfaces their updates
+# (the user wants to SEE when a source pack updates). excluded() drops the megapack + dupes from the merge.
+# Dev override: set WNL_MEGAPACK_SRC to build from an external sources folder instead.
+SRC = os.environ.get("WNL_MEGAPACK_SRC", RP)
 OUT = os.path.join(RP, "WNL-MegaPack.zip")
 
 # --- packs to EXCLUDE: the 3 non-fa mob dupes (FA variants win) + our own output if it exists ---
 EXCLUDE_SUBSTR = ["creepers-refreshed-v", "golems-refreshed-v", "mobs-refreshed-v", "wnl-megapack"]
+DROP_NAMES = ["visual titles"]   # unconditional drops — Visual Traveler's Titles (its mod was removed)
 def excluded(f):
     fl = f.lower()
+    if any(d in fl for d in DROP_NAMES):
+        return True
     # keep the -fa ones; drop only the plain non-fa (…-refreshed-vN, no "fa")
     for s in EXCLUDE_SUBSTR:
         if s in fl and "fa" not in fl.replace("-refreshed", ""):
@@ -41,11 +48,26 @@ def tier(f):
     if fl.startswith("staytrue26") or "stay true compat" in fl: return 42
     # block/deco vanilla overrides
     if has("better-leaves", "fluffy carpet", "ladders", "torches", "fancy crops", "simple grass"): return 30
-    # FA / entity ecosystem (entity textures + animations) — high
-    if has("freshanimations", "fa+", "+fa", "fresh patch", "fresh moves", "freshly modded", "abnormally fresh",
-           " fa ", "fa ", "x fa", "refreshed-fa", "morepiglins", "armored illager", "fa illager",
-           "wandering traders", "assorted allays", "mca_resourcepack", "semos", "boss-refreshed",
-           "th + fresh", "eating animations"): return 55
+    # --- FreshAnimations ecosystem: EXPLICIT sub-tiers (higher wins) ---
+    # FA base + official extensions OWN the 29 vanilla core mobs; every other FA-adjacent pack sits
+    # BELOW them so it only fills modded/variant mobs FA doesn't define. This fixes the old flat-sort
+    # clobber (mobs-refreshed-fa / FreshTextures+FA were winning spider/husk/illager/piglin over FA →
+    # broken animations). User intent: "FreshAnimations+FA+All_Extensions own core mobs." See pack_rules.
+    FA_TIERS = [   # (filename substring, tier) — most-specific first
+        ("fa+all_extensions", 56), ("fa+player", 56),     # 56: official extensions — above base (FA docs)
+        ("freshanimations", 55),                          # 55: BASE — wins all 29 core mobs
+        # 52: FA mod-compat patches (modded mobs animate w/ FA; lose vanilla-core to base above them)
+        ("fresh patch", 52), ("freshly modded", 52), ("abnormally fresh", 52), ("fa illager", 52),
+        ("armored illager", 52), ("eating animations", 52), ("quarkfacompat", 52), ("morepiglins", 52),
+        ("assorted allays", 52), ("wandering traders", 52), ("mca_resourcepack", 52), ("semos", 52),
+        # 51: alt-style "refreshed" mob retextures + movement anims (lose vanilla-core to FA)
+        ("refreshed-fa", 51), ("refreshed-v", 51), ("boss-refreshed", 51), ("fresh moves", 51),
+        # 50: FA texture-compat layers (non-FA-animated looks; lose to FA models)
+        ("freshtextures+fa", 50), ("th + fresh", 50),
+    ]
+    for sub, t in FA_TIERS:
+        if sub in fl:
+            return t
     # GUI / icons / lang / font — top-ish, minimal conflict
     if has("icons", "descriptions", "biomesnames", "healthbars", "armor trim", "journeymap"): return 60
     # our fix layer — very top
@@ -54,8 +76,8 @@ def tier(f):
     return 40
 
 # --- collect + order ---
-packs = [f for f in os.listdir(RP) if f.endswith(".zip") and not excluded(f)]
-dropped = [f for f in os.listdir(RP) if f.endswith(".zip") and excluded(f)]
+packs = [f for f in os.listdir(SRC) if f.endswith(".zip") and not excluded(f)]
+dropped = [f for f in os.listdir(SRC) if f.endswith(".zip") and excluded(f)]
 packs.sort(key=lambda f: (tier(f), f.lower()))
 
 # --- merge: overlay low->high into a path->bytes map (later wins) ---
@@ -65,7 +87,7 @@ provenance = {} # internal path -> winning pack (for stats)
 per_pack_added = {}
 for f in packs:
     try:
-        z = zipfile.ZipFile(os.path.join(RP, f))
+        z = zipfile.ZipFile(os.path.join(SRC, f))
     except Exception as e:
         print("  SKIP (bad zip):", f, e); continue
     added = 0
@@ -74,6 +96,9 @@ for f in packs:
             continue
         if not n.startswith("assets/"):
             continue
+        nl = n.lower()
+        if nl.endswith("desktop.ini") or nl.endswith(".ds_store") or nl.endswith("thumbs.db"):
+            continue   # strip Windows/macOS folder cruft that rode in from source packs
         try:
             files[n] = z.read(n)
         except Exception:
