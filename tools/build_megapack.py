@@ -32,7 +32,11 @@ DROP_SUBSTR = [
     "blues_better_monsters",       # #72 mine-only
     "better zombies",              # batch-2 mine-only (Blue's Better Zombies)
     "fresh variated villagers",    # #71 mine-only (port the idea -> our own random-variant villagers)
+    "cataclysmic",                 # #98 SOUND pack (94MB cataclysm music .ogg) -> outside the megapack;
+                                   #     keep the zip in resourcepacks/ + enable it separately for the music
 ]
+# Also drop any stray sound bloat from OTHER packs so the megapack stays texture/model-focused (#98 policy).
+DROP_SOUNDS = True   # skip assets/<ns>/sounds/**.ogg during merge
 def dropped_pack(f):
     fl = f.lower()
     return any(d in fl for d in DROP_SUBSTR)
@@ -157,9 +161,26 @@ def sanitize(n, data):
                 s = line.strip()
                 if s.startswith("tintIndex") and "=" in s and not s.split("=", 1)[1].strip().lstrip("-").isdigit():
                     SANITIZE_LOG.append("strip bad tintIndex " + n.split("/")[-1]); continue
-                if s.startswith("tintBlock") and "=" in s and any(a in s for a in ABSENT_NS):
-                    SANITIZE_LOG.append("strip absent tintBlock " + n.split("/")[-1]); continue
+                # (b) tintBlock referencing absent-mod block OR non-existent minecraft:mossy_block (real=moss_block)
+                if s.startswith("tintBlock") and "=" in s and (any(a in s for a in ABSENT_NS) or "mossy_block" in s):
+                    SANITIZE_LOG.append("strip bad tintBlock " + n.split("/")[-1]); continue
                 kept.append(line)
+            # (a) FIX (not drop): Stay True's _overlays CTMs are method=overlay (17 tiles); a few (e.g.
+            #     mushroom_stem) ship with NO method line -> Continuity defaults to method=ctm (needs 47)
+            #     -> rejects. All _overlays are method=overlay, so inject it where missing -> CTM works.
+            if "/_overlays/" in nl and not any(k.strip().startswith("method") for k in kept):
+                kept.insert(0, "method=overlay")
+                SANITIZE_LOG.append("add method=overlay " + n.split("/")[-1])
+            return ("\n".join(kept)).encode("utf-8")
+        except Exception:
+            return data
+    # verify-boot 2026-06-26 (c): CITResewn rejects `weight=` in CIT props -> strip it (CIT still applies)
+    if "optifine/cit/" in nl and nl.endswith(".properties"):
+        try:
+            lines = data.decode("utf-8", "replace").splitlines()
+            kept = [l for l in lines if not l.strip().startswith("weight=")]
+            if len(kept) != len(lines):
+                SANITIZE_LOG.append("strip citresewn weight= " + n.split("/")[-1])
             return ("\n".join(kept)).encode("utf-8")
         except Exception:
             return data
@@ -222,6 +243,8 @@ def extract(zpath, packname):
                 continue
             if mob_band and "/textures/block/" in il:
                 continue   # mob/variety pack — block textures stay with the block base
+            if DROP_SOUNDS and il.endswith(".ogg"):
+                continue   # #98: sounds belong in separate packs, not the texture megapack (keeps it lean)
             try:
                 raw = z.read(n)
             except Exception:
@@ -293,55 +316,111 @@ with zipfile.ZipFile(OUT, "w", zipfile.ZIP_DEFLATED, compresslevel=6) as z:
 
 sz = os.path.getsize(OUT) / (1024 * 1024)
 
-# === emit human-readable CURATED LIST (_dev/megapack-curated-list.md) for user review/editing ===
-import collections as _c
+# === emit CONDENSED, MANAGEABLE CURATED LIST (_dev/megapack-curated-list.md) for user audit ===
+import collections as _c, re as _re
+def _short(pk):
+    if pk is None: return "—"
+    s = _re.sub(r"\xa7.", "", pk)                       # strip §color codes
+    s = _re.sub(r"\.zip$", "", s)
+    s = _re.sub(r"[ _\-]v?\d[\d.\-+ ()a-z]*$", "", s).strip()  # trim trailing version
+    return s[:32] if s else pk[:32]
 def _cat(p):
     parts = p.split("/"); ns = parts[1] if len(parts) > 1 else "?"; rest = "/".join(parts[2:])
     if ns == "minecraft":
-        seg = rest.split("/")
-        if rest.startswith("textures/entity/"): return ("1 MOB (entity textures)", seg[2] if len(seg) > 2 else "_")
-        if rest.startswith("optifine/cem"):     return ("2 MOB (CEM .jem models)", seg[-1])
-        if rest.startswith("optifine/random"):  return ("3 MOB (ETF random variants)", seg[-1])
-        if rest.startswith("optifine/ctm"):     return ("8 CTM", seg[2] if len(seg) > 2 else "_")
-        if rest.startswith("textures/block/"):  return ("4 BLOCK", seg[-1])
-        if rest.startswith("textures/item/"):   return ("5 ITEM", seg[-1])
-        if rest.startswith("textures/gui") or "/gui/" in rest: return ("6 GUI", seg[-1])
-        if rest.startswith("textures/painting"):return ("7 PAINTING", seg[-1])
-        if rest.startswith("models/"):          return ("9 MODEL (block/item)", seg[-1])
-        if "font" in rest:                       return ("A FONT", seg[-1])
-        return ("B MISC minecraft", rest)
-    return ("Z MODDED: " + ns, "")
-cats = _c.defaultdict(lambda: _c.defaultdict(set))  # category -> key -> set(winners)
+        if rest.startswith("textures/block/"):  return "BLOCK"
+        if rest.startswith("textures/item/"):   return "ITEM"
+        if rest.startswith("textures/entity/"): return "ENTITY(tex)"
+        if rest.startswith("optifine/cem"):     return "ENTITY(model .jem)"
+        if rest.startswith("optifine/random"):  return "ENTITY(variants)"
+        if rest.startswith("optifine/ctm"):     return "CTM"
+        if rest.startswith("models/"):          return "MODEL"
+        if rest.startswith("textures/gui") or "/gui/" in rest: return "GUI"
+        if rest.startswith("textures/painting"):return "PAINTING"
+        if "font" in rest:                       return "FONT"
+        return "MISC-minecraft"
+    return "MODDED: " + ns
 foot = _c.Counter()
-for path, win in provenance.items():
-    c, key = _cat(path); cats[c][key].add(win); foot[win] += 1
-ml = ["# WNL Mega-Pack — CURATED LIST (auto-generated by build_megapack.py — edit the RULES, not this file)",
-      "", "Every asset CATEGORY -> which source pack WON it. Review for wrong winners; fix in",
-      "`_dev/megapack-curation-rules.md` + the tier table, then rebuild. ⚠ = split (>1 pack wins one",
-      "mob's files = texture/model mismatch risk). Generated %d assets across %d packs + WNL-Custom." % (len(provenance), len(packs)),
-      "", "## Pack footprint (assets won)"]
+catwin = _c.defaultdict(_c.Counter)   # category -> winner -> count
+for p, w in provenance.items():
+    foot[w] += 1; catwin[_cat(p)][w] += 1
+# per-mob: model (.jem) winner vs primary-texture winner  (the true garble signal)
+ent = set()
+for p in provenance:
+    if p.startswith("assets/minecraft/textures/entity/"):
+        s = p.split("/")
+        if len(s) > 5: ent.add(s[4])   # require a FILE beyond the mob folder (skip loose entity/*.png)
+mobrows = []
+for m in sorted(ent):
+    jem = provenance.get("assets/minecraft/optifine/cem/%s.jem" % m)
+    tex = provenance.get("assets/minecraft/textures/entity/%s/%s.png" % (m, m))
+    if not tex:
+        for pp, w in sorted(provenance.items()):
+            if pp.startswith("assets/minecraft/textures/entity/%s/" % m) and pp.endswith(".png"):
+                tex = w; break
+    flag = "  ⚠MISMATCH" if (jem and tex and jem != tex) else ""
+    mobrows.append((m, jem, tex, flag))
+mism = sum(1 for r in mobrows if r[3])
+def _w(*cands):
+    for c in cands:
+        if c in provenance: return provenance[c]
+    return None
+# RULE COMPLIANCE spot-check: did the spec's key drivers actually win?
+RULE_CHECKS = [
+    ("#28 Stay True drives vanilla blocks", _w("assets/minecraft/textures/block/stone.png"), "stay true"),
+    ("#45 Better Leaves drives leaves",      _w("assets/minecraft/textures/block/oak_leaves.png"), "better-leaves"),
+    ("#21 Fluffy drives wool",               _w("assets/minecraft/textures/block/white_wool.png"), "fluffy"),
+    ("#1 Armory drives armor",               _w("assets/minecraft/textures/models/armor/diamond_layer_1.png"), "armory"),
+    ("#2 Modded Omelet drives spawn eggs",   _w("assets/minecraft/textures/item/allay_spawn_egg.png",
+                                                "assets/minecraft/textures/item/creeper_spawn_egg.png"), "omelet"),
+    ("#55 FA owns core mob models",          _w("assets/minecraft/optifine/cem/creeper.jem"), ("fa+", "freshanim")),
+    ("#36 Musgo must NOT win vanilla blocks", _w("assets/minecraft/textures/block/stone.png"), ("!musgo",)),
+    ("#29 enchanting-table driver",          _w("assets/minecraft/textures/block/enchanting_table_top.png"), "enchant"),
+]
+rc = []
+for label, winner, expect in RULE_CHECKS:
+    exps = expect if isinstance(expect, tuple) else (expect,)
+    if winner is None:
+        rc.append("- ?  %s — (asset not present)" % label)
+    elif exps[0].startswith("!"):   # negative check: winner must NOT contain the token
+        bad = exps[0][1:]
+        rc.append(("- ✗  %s — got **%s**" if bad in winner.lower() else "- ✓  %s — %s") % (label, _short(winner)))
+    elif any(e in winner.lower() for e in exps):
+        rc.append("- ✓  %s — %s" % (label, _short(winner)))
+    else:
+        rc.append("- ✗  %s — got **%s** (expected ~%s)" % (label, _short(winner), "/".join(exps)))
+
+def _line(c):   # "BLOCK   →  Stay True (3700) · Better Leaves (450) · …"
+    tops = catwin[c].most_common(6); extra = len(catwin[c]) - len(tops)
+    body = " · ".join("%s (%d)" % (_short(w), n) for w, n in tops)
+    if extra > 0: body += " · +%d more" % extra
+    return "- **%s** → %s" % (c.ljust(16), body)
+
+ml = ["# WNL Mega-Pack — curated overview  (auto-generated; %d assets / %d packs)" % (len(provenance), len(packs)),
+      "", "Audit: find a wrong driver → fix `_dev/megapack-curation-rules.md` + the tier table → rebuild.",
+      "", "## Rule compliance (did the spec's drivers win?)"] + rc
+ml += ["", "## Mobs — model | texture  (%d mobs · %d ⚠mismatch)" % (len(mobrows), mism),
+       "⚠ = model and texture from DIFFERENT packs (garble risk) — check these first.", "", "```"]
+for m, jem, tex, flag in mobrows:
+    cell = "%-16s %-26s" % (m, _short(jem))
+    cell += "" if (jem and tex and jem == tex) else ("| %s" % _short(tex))
+    ml.append(cell + ("   <-- MISMATCH" if flag else ""))
+ml += ["```", "", "## Vanilla categories — driver (count) · runners-up"]
+for c in ["BLOCK", "ITEM", "ENTITY(tex)", "ENTITY(model .jem)", "ENTITY(variants)", "CTM",
+          "MODEL", "GUI", "PAINTING", "FONT", "MISC-minecraft"]:
+    if c in catwin: ml.append(_line(c))
+modded = sorted(k for k in catwin if k.startswith("MODDED") and len(catwin[k]) > 1)
+single = sum(1 for k in catwin if k.startswith("MODDED") and len(catwin[k]) == 1)
+ml += ["", "## Modded namespaces with >1 pack (%d; %d single-pack omitted)" % (len(modded), single)]
+for c in modded:
+    ml.append(_line(c).replace("MODDED: ", ""))
+ml += ["", "## Pack footprint (assets won)"]
 for pk, n in foot.most_common():
-    ml.append("- %5d  %s" % (n, pk))
-for c in sorted(cats):
-    keys = cats[c]
-    ml.append(""); ml.append("## %s  (%d entries)" % (c[2:] if c[1] == " " else c, len(keys)))
-    if c.startswith("Z"):   # modded: summarize winners (too many to list per-asset)
-        wc = _c.Counter()
-        for ws in keys.values():
-            for w in ws: wc[w] += 1
-        for w, n in wc.most_common():
-            ml.append("  %s  (%d)" % (w, n))
-        continue
-    for key in sorted(keys):
-        wins = sorted(keys[key])
-        flag = " ⚠SPLIT" if (c.startswith("1") or c.startswith("2") or c.startswith("3")) and len(wins) > 1 else ""
-        ml.append("- **%s** ← %s%s" % (key, ", ".join(wins), flag))
+    ml.append("- %5d  %s" % (n, _short(pk)))
 try:
     with open(os.path.join(ROOT, "_dev", "megapack-curated-list.md"), "w", encoding="utf-8") as fh:
         fh.write("\n".join(ml))
-    _listed = len(provenance)
 except Exception as _e:
-    _listed = 0; print("  (curated list write failed:", _e, ")")
+    print("  (curated list write failed:", _e, ")")
 
 print("=== WNL-MegaPack.zip built (curation engine Phase 1) ===")
 print("  %d packs merged, %d dropped, %d unique assets, +%d WNL-Custom, %.1f MB"
