@@ -166,6 +166,10 @@ function uvOptionalizeInjectors(classNode, label) {
 
 function initializeCoreMod() {
     var UVMAP = {
+        // (ScalableLux spike removed 2026-06-27: confirmed ModInfo is NOT coremod-transformable — FML
+        //  loading runs in the boot layer, before the transforming classloader. The deployed PackFixes
+        //  1.46.0 jar still carries the harmless dead spike entry; the next PackFixes build drops it.
+        //  ScalableLux tag-drop needs a boot-layer ITransformationService, not a coremod. See task #164.)
         // Fix 30: Domum Ornamentum architect's-cutter item ICONS render blank/wrong when DO's
         // MateriallyTexturedBakedModel is wrapped by a Fabric ForwardingBakedModel that reports
         // isVanillaAdapter()=false (Continuity emissive/CTM EmissiveBakedModel/CtmBakedModel,
