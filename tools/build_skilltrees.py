@@ -116,20 +116,23 @@ def _w(path, obj):
         json.dump(obj, f, indent=2)
 
 # ---------------------------------------------------------------- categories
+# NOTE: 1.21.1 attribute registry IDs keep the `minecraft:generic.` / `minecraft:player.` prefix
+# (the prefix-drop to bare `minecraft:attack_damage` only landed in 1.21.2). puffish rejects the bare
+# form as "Unknown attribute" — confirmed by boot 2026-06-27.
 MARTIAL_LANES = [
-    {"key": "sword",    "label": "Sword",    "icon": item_icon("minecraft:iron_sword"), "attr": "minecraft:attack_damage"},
-    {"key": "axe",      "label": "Axe",      "icon": item_icon("minecraft:iron_axe"),   "attr": "minecraft:attack_damage"},
-    {"key": "mace",     "label": "Mace",     "icon": item_icon("minecraft:mace"),       "attr": "minecraft:attack_damage"},
-    {"key": "bow",      "label": "Bow",      "icon": item_icon("minecraft:bow"),        "attr": "minecraft:attack_speed"},
-    {"key": "crossbow", "label": "Crossbow", "icon": item_icon("minecraft:crossbow"),   "attr": "minecraft:attack_speed"},
-    {"key": "shield",   "label": "Shield",   "icon": item_icon("minecraft:shield"),     "attr": "minecraft:armor"},
+    {"key": "sword",    "label": "Sword",    "icon": item_icon("minecraft:iron_sword"), "attr": "minecraft:generic.attack_damage"},
+    {"key": "axe",      "label": "Axe",      "icon": item_icon("minecraft:iron_axe"),   "attr": "minecraft:generic.attack_damage"},
+    {"key": "mace",     "label": "Mace",     "icon": item_icon("minecraft:mace"),       "attr": "minecraft:generic.attack_damage"},
+    {"key": "bow",      "label": "Bow",      "icon": item_icon("minecraft:bow"),        "attr": "minecraft:generic.attack_speed"},
+    {"key": "crossbow", "label": "Crossbow", "icon": item_icon("minecraft:crossbow"),   "attr": "minecraft:generic.attack_speed"},
+    {"key": "shield",   "label": "Shield",   "icon": item_icon("minecraft:shield"),     "attr": "minecraft:generic.armor"},
 ]
 PARKOUR_LANES = [
-    {"key": "sprint", "label": "Sprint", "icon": item_icon("minecraft:feather"),         "attr": "minecraft:movement_speed"},
-    {"key": "jump",   "label": "Jump",   "icon": item_icon("minecraft:rabbit_foot"),     "attr": "minecraft:jump_strength"},
-    {"key": "leap",   "label": "Leap",   "icon": item_icon("minecraft:firework_rocket"), "attr": "minecraft:movement_speed"},
-    {"key": "roll",   "label": "Roll",   "icon": item_icon("minecraft:slime_ball"),      "attr": "minecraft:safe_fall_distance"},
-    {"key": "vault",  "label": "Vault",  "icon": item_icon("minecraft:ladder"),          "attr": "minecraft:step_height"},
+    {"key": "sprint", "label": "Sprint", "icon": item_icon("minecraft:feather"),         "attr": "minecraft:generic.movement_speed"},
+    {"key": "jump",   "label": "Jump",   "icon": item_icon("minecraft:rabbit_foot"),     "attr": "minecraft:generic.jump_strength"},
+    {"key": "leap",   "label": "Leap",   "icon": item_icon("minecraft:firework_rocket"), "attr": "minecraft:generic.movement_speed"},
+    {"key": "roll",   "label": "Roll",   "icon": item_icon("minecraft:slime_ball"),      "attr": "minecraft:generic.safe_fall_distance"},
+    {"key": "vault",  "label": "Vault",  "icon": item_icon("minecraft:ladder"),          "attr": "minecraft:generic.step_height"},
 ]
 
 print("Building categories:")
