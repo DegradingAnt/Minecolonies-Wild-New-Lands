@@ -311,6 +311,42 @@ function initializeCoreMod() {
                 return classNode;
             }
         },
+        // Fix 58: Galosphere ForgottenRuinsMapLootModifier.doApply calls MapItem.renderBiomePreviewMap, which
+        // SYNCHRONOUSLY scans biomes across a large radius on the SERVER THREAD whenever a Forgotten Ruins
+        // treasure map is rolled in loot -> 40s+ server-tick stalls at world load-in (during Ksyxis prepareLevels)
+        // and again whenever the map drops. (Verified thread dump: Server thread in MapItem.renderBiomePreviewMap
+        // <- net.orcinus.galosphere.util.loot_modifiers.ForgottenRuinsMapLootModifier.doApply.) FIX: skip the
+        // renderBiomePreviewMap call (replace the INVOKESTATIC with POP,POP to discard its two args). The treasure
+        // map still drops + keeps its target decoration + name; it just fills its biome colours in as the player
+        // explores (exactly like a vanilla explorer map) instead of pre-rendering them in one huge synchronous
+        // scan. Self-no-ops with a log line if Galosphere renames the method or drops the call.
+        'uvfixes_galosphere_forgottenruins_map_stall': {
+            'target': { 'type': 'CLASS', 'name': 'net.orcinus.galosphere.util.loot_modifiers.ForgottenRuinsMapLootModifier' },
+            'transformer': function (classNode) {
+                var done = false;
+                for (var i = 0; i < classNode.methods.size() && !done; i++) {
+                    var m = classNode.methods.get(i);
+                    if (!m.name.equals('doApply')) continue;
+                    var insns = m.instructions.toArray();
+                    for (var j = 0; j < insns.length; j++) {
+                        var insn = insns[j];
+                        if (insn instanceof MethodInsnNode
+                                && insn.getOpcode() == Opcodes.INVOKESTATIC
+                                && insn.owner.equals('net/minecraft/world/item/MapItem')
+                                && insn.name.equals('renderBiomePreviewMap')
+                                && insn.desc.equals('(Lnet/minecraft/server/level/ServerLevel;Lnet/minecraft/world/item/ItemStack;)V')) {
+                            m.instructions.insertBefore(insn, new InsnNode(Opcodes.POP));   // discard ItemStack (the map)
+                            m.instructions.insertBefore(insn, new InsnNode(Opcodes.POP));   // discard ServerLevel
+                            m.instructions.remove(insn);
+                            done = true;
+                            break;
+                        }
+                    }
+                }
+                log(done ? 'galosphere ForgottenRuinsMap renderBiomePreviewMap skipped (kills the 40s load-in biome-scan stall; map still drops + locates)' : 'galosphere: ForgottenRuinsMapLootModifier.doApply renderBiomePreviewMap call not found, patch skipped (mod updated?)');
+                return classNode;
+            }
+        },
         // Fix 56: createaeronauticscurios 2.1 (aeronautics_curios_compat) ClientKeyInputHandler.onClientTick
         // calls ModKeyBindings.REMOTE_USE.consumeClick() every client tick, but REMOTE_USE is null because the
         // mod's keybinding/feature init is skipped under the bundled Create Aeronautics 1.3.0 mismatch (same
