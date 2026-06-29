@@ -40,6 +40,10 @@ JSON_CHECKS = [
 # (label, c2me.toml key-path, expected)  -- TOML, parsed via tomllib (true vs "default")
 TOML_CHECKS = [
     ("c2me useDensityFunctionCompiler", ["vanillaWorldGenOptimizations", "useDensityFunctionCompiler"], True),
+    # globalExecutorParallelism bumped "default"(~14) -> 20 on 2026-06-29 (c2me-ocl author rec
+    # "thread count or slightly below" for faster worldgen under DH exploration; 5900X=24 threads,
+    # leaves ~4 for render/lux/DH). Revert to "default" if frame stutter appears during heavy gen.
+    ("c2me globalExecutorParallelism",  ["globalExecutorParallelism"], 20),
     # nativeAcceleration.enabled REVERTED to "default" (off) 2026-06-14 — speculative AVX2 native worldgen,
     # benefit never confirmed + JNI risk; user flagged it. No longer a tracked-on value.
 ]

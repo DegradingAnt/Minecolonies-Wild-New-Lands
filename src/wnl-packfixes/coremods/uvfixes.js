@@ -2695,6 +2695,68 @@ function initializeCoreMod() {
         }
     };
 
+    // Fix 62: jearchaeology x dungeon_difficulty player-JOIN DEADLOCK (confirmed hard-stuck: identical park
+    // addr across dumps, all 14 c2me workers idle, world never loads). jearchaeology JEArchaeology$Events
+    // .onDataSync fires when a player joins -> Helper.getAllBrushingRecipes ROLLS every brushing recipe's loot
+    // table. Those tables carry dungeon_difficulty's LocalScalingLootFunction -> ItemScaling.scale ->
+    // PatternMatching.getDifficultyResult -> LocationData.matches(Filters, ServerLevel), which runs a BLOCKING
+    // StructureManager.startsForStructure(ChunkPos, Predicate) -> Level.getChunk(FULL, load=true) on the Server
+    // thread. At login the spawn chunk isn't FULL yet + c2me can't service it (main thread parked) -> permanent
+    // park in PlayerList.placeNewPlayer. Same blocking-main-thread-getChunk-under-c2me class as Fix 26 / Fix 60
+    // / the byepregen FasterGetChunk deadlock. FIX (nothing breaks): gate the structure lookup on a NON-blocking
+    // ServerLevel.hasChunkAt(this.position) -- inserted right before the startsForStructure block, after the
+    // match flag is reset to false; if the chunk isn't loaded, IFEQ jumps to the result builder so the zone
+    // reads as 'no structure match' (flag already false). Real gameplay (mob drops / chests) always has the
+    // chunk loaded -> full structure scaling UNCHANGED; only the join-time enumeration (which has no real
+    // location to scale to anyway) skips it. hasChunkAt -> getChunk(FULL, create=false) is non-blocking;
+    // dungeon_difficulty is mojmap at runtime and already invokevirtuals a LevelReader default (getBiome) on
+    // ServerLevel, so hasChunkAt resolves identically. Self-no-ops with a log line if the mod moves the seam.
+    UVMAP['uvfixes_dungeondiff_nonblocking_structure_lookup'] = {
+        'target': { 'type': 'CLASS', 'name': 'net.dungeon_difficulty.logic.PatternMatching$LocationData' },
+        'transformer': function (classNode) {
+            var SELF = classNode.name;                              // net/dungeon_difficulty/logic/PatternMatching$LocationData
+            var MATCH_DESC = '(Lnet/dungeon_difficulty/config/Config$Zone$Filters;Lnet/minecraft/server/level/ServerLevel;)Lnet/dungeon_difficulty/logic/PatternMatching$LocationData$Match;';
+            var status = 'method-not-found';
+            for (var i = 0; i < classNode.methods.size(); i++) {
+                var m = classNode.methods.get(i);
+                if (!(m.name.equals('matches') && m.desc.equals(MATCH_DESC))) continue;
+                // anchors: the ServerLevel.structureManager() call (start of the blocking structure block) +
+                // the inline `new ...Match` (the result builder all skip-branches converge on).
+                var smCall = null, newMatch = null;
+                var arr = m.instructions.toArray();
+                for (var j = 0; j < arr.length; j++) {
+                    var insn = arr[j];
+                    if (insn instanceof MethodInsnNode && insn.getOpcode() == Opcodes.INVOKEVIRTUAL
+                            && insn.owner.equals('net/minecraft/server/level/ServerLevel')
+                            && insn.name.equals('structureManager')) smCall = insn;
+                    if (insn instanceof TypeInsnNode && insn.getOpcode() == Opcodes.NEW
+                            && insn.desc.equals('net/dungeon_difficulty/logic/PatternMatching$LocationData$Match')) newMatch = insn;
+                }
+                if (smCall == null || newMatch == null) { status = 'anchors-not-found'; break; }
+                // receiver ALOAD of structureManager() = the (clean-stack) point to insert the guard before
+                var aload = smCall.getPrevious();
+                while (aload != null && !(aload instanceof VarInsnNode && aload.getOpcode() == Opcodes.ALOAD)) aload = aload.getPrevious();
+                // skip target = the LabelNode just before the inline `new Match` (the convergence label)
+                var lEnd = newMatch.getPrevious();
+                while (lEnd != null && !(lEnd instanceof LabelNode)) lEnd = lEnd.getPrevious();
+                if (aload == null || lEnd == null) { status = 'insertion-points-not-found'; break; }
+                var g = new InsnList();
+                g.add(new VarInsnNode(Opcodes.ALOAD, 2));                                   // ServerLevel
+                g.add(new VarInsnNode(Opcodes.ALOAD, 0));                                   // this
+                g.add(new FieldInsnNode(Opcodes.GETFIELD, SELF, 'position', 'Lnet/minecraft/core/BlockPos;'));
+                g.add(new MethodInsnNode(Opcodes.INVOKEVIRTUAL, 'net/minecraft/server/level/ServerLevel', 'hasChunkAt', '(Lnet/minecraft/core/BlockPos;)Z', false));
+                g.add(new JumpInsnNode(Opcodes.IFEQ, lEnd));                                 // chunk not loaded -> skip structure lookup (match stays false)
+                m.instructions.insertBefore(aload, g);
+                status = 'patched';
+                break;
+            }
+            log(status == 'patched'
+                ? 'dungeon_difficulty LocationData.matches: structure lookup gated on non-blocking hasChunkAt -- kills the jearchaeology join-time startsForStructure deadlock (structure scaling preserved when chunk is loaded)'
+                : ('dungeon_difficulty: LocationData.matches structure guard NOT applied (' + status + '), skipped (mod updated?)'));
+            return classNode;
+        }
+    };
+
     return UVMAP;
 }
 
