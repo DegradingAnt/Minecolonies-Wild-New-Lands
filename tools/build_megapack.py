@@ -34,6 +34,10 @@ DROP_SUBSTR = [
     "fresh variated villagers",    # #71 mine-only (port the idea -> our own random-variant villagers)
     "cataclysmic",                 # #98 SOUND pack (94MB cataclysm music .ogg) -> outside the megapack;
                                    #     keep the zip in resourcepacks/ + enable it separately for the music
+    "musgo",                       # 2026-06-30: PULLED per user "until we make its textures into a mod". Musgo
+                                   #     overrides vanilla fence/brick blockstates with moss variants -> caused the
+                                   #     fence->moss + structure "mu bricks" bugs. Re-add as a proper mod with its own
+                                   #     placeable block IDs (tasks #244/#249), not as a vanilla-block override.
 ]
 # Also drop any stray sound bloat from OTHER packs so the megapack stays texture/model-focused (#98 policy).
 DROP_SOUNDS = True   # skip assets/<ns>/sounds/**.ogg during merge

@@ -2906,6 +2906,48 @@ function initializeCoreMod() {
         }
     };
 
+    // Fix: c2me (FlowSched) ItemHolder.addTicket throws IllegalStateException("Ticket already exists")
+    // when wnllux's ChunkSystemHooks.addLightTicket re-adds a light ticket c2me's scheduler already
+    // holds, under OCL parallel fast-gen timing (crash-2026-06-29_06.16 chain: ChunkSystemHooks
+    // .addLightTicket -> StatusAdvancingScheduler.addTicket0 -> ItemHolder.addTicket:143). Make the
+    // duplicate a no-op: the ticket already exists, so its dependency/futures are already registered;
+    // skipping the re-add is correct. Inserts a RETURN before the throw. Bytecode-verified vs
+    // c2me_base 0.4.0-alpha.0.112: addTicket(ItemStatus,ItemTicket) does tickets.checkAdd(..)Z; ifne
+    // (add) ; else new IllegalStateException "Ticket already exists"; athrow. This is the #233 gate to
+    // re-enabling OCL. Revert: delete this entry.
+    UVMAP['uvfixes_c2me_idempotent_light_ticket'] = {
+        'target': { 'type': 'CLASS', 'name': 'com.ishland.flowsched.scheduler.ItemHolder' },
+        'transformer': function (classNode) {
+            var done = false;
+            for (var i = 0; i < classNode.methods.size() && !done; i++) {
+                var m = classNode.methods.get(i);
+                if (!m.name.equals('addTicket')) continue;
+                var arr = m.instructions.toArray();
+                for (var j = 0; j < arr.length; j++) {
+                    var insn = arr[j];
+                    if (insn instanceof TypeInsnNode && insn.getOpcode() == Opcodes.NEW
+                            && insn.desc.equals('java/lang/IllegalStateException')) {
+                        // confirm this NEW is the "Ticket already exists" throw (LDC within the next few insns)
+                        var k = insn; var hit = false;
+                        for (var n = 0; n < 4 && k != null; n++) {
+                            k = k.getNext();
+                            if (k instanceof LdcInsnNode && k.cst != null && ('' + k.cst) === 'Ticket already exists') { hit = true; break; }
+                        }
+                        if (hit) {
+                            m.instructions.insertBefore(insn, new InsnNode(Opcodes.RETURN));
+                            done = true;
+                            break;
+                        }
+                    }
+                }
+            }
+            log(done
+                ? 'c2me FlowSched ItemHolder.addTicket: duplicate light-ticket now no-ops instead of throwing -- unblocks OCL fast-gen (#233)'
+                : 'c2me ItemHolder.addTicket: "Ticket already exists" throw site NOT found, skipped (c2me/FlowSched updated?)');
+            return classNode;
+        }
+    };
+
     return UVMAP;
 }
 
