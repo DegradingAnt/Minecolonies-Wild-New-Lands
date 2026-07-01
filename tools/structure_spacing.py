@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Structure spawn + spacing pass. Re-scans jars for structures (biomes -> can-it-spawn)
 and structure_sets (spacing/separation/salt -> crowding + overlap risk).
-NOTE: SparseStructures spreadFactor=4 multiplies all spacing/separation at runtime (effective = raw x4),
-and idBasedSalt=true re-hashes each set's salt from its id (mitigates raw salt collisions)."""
+NOTE (2026-07-01): SparseStructures has been REMOVED — structurify 2.0.28 is now SOLE structure control,
+so there is NO runtime x4 multiplier anymore; structurify.json raw spacing/separation apply directly (chunks).
+The old idBasedSalt re-hash note is likewise moot; structurify rewrites each structure_set from its config."""
 import json, os, zipfile, collections
 
 ROOT = r"C:/Users/linde/curseforge/minecraft/Instances/Ultimate vibes distant horizons version"

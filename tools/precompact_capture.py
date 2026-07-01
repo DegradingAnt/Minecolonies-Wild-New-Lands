@@ -48,11 +48,18 @@ def main():
         if isinstance(top, list):
             L.append("- CHANGELOG top: " + " | ".join(top))
 
+    # RESUME ANCHOR: the newest _dev/RESTART-*.md is the READ-FIRST doc (wnl-context skill). Point resume at it.
+    restart = safe(lambda: max(glob.glob(os.path.join(ROOT, "_dev", "RESTART-*.md")), key=os.path.getmtime), "")
+    has_restart = bool(restart) and isinstance(restart, str) and os.path.exists(restart)
+    if has_restart:
+        L.append("- ★ RESUME: read `_dev/" + os.path.basename(restart) +
+                 "` FIRST (read-first anchor), then `git -C C:/Users/linde/curseforge/WNL-Dev log -1` for the last banked increment.")
     warn = ""
-    if os.path.exists(RICH) and os.path.exists(TRAIL):
+    anchor = restart if has_restart else RICH   # check the CURRENT rich savestate (RESTART doc), not the legacy SAVESTATE.md
+    if os.path.exists(anchor) and os.path.exists(TRAIL):
         try:
-            if os.path.getmtime(TRAIL) > os.path.getmtime(RICH) + 300:
-                warn = "rich SAVESTATE.md is OLDER than recent changes — run /wnl-savestate; it may be stale."
+            if os.path.getmtime(TRAIL) > os.path.getmtime(anchor) + 600:  # 10min: lenient for active grinding
+                warn = "the RESTART savestate is OLDER than recent changes — refresh it (wnl-savestate) before the next compaction."
                 L.append("- WARNING: " + warn)
         except Exception:
             pass
